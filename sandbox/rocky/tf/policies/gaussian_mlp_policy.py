@@ -144,6 +144,10 @@ class GaussianMLPPolicy(StochasticPolicy, LayersPowered, Serializable):
         return True
 
     def dist_info_sym(self, obs_var, state_info_vars=None):
+        # This function constructs the tf graph, only called during beginning of training
+        # obs_var - observation tensor
+        # mean_var - tensor for policy mean
+        # std_param_var - tensor for policy std before output
         mean_var, std_param_var = L.get_output([self._l_mean, self._l_std_param], obs_var)
         if self.min_std_param is not None:
             std_param_var = tf.maximum(std_param_var, self.min_std_param)
@@ -165,7 +169,7 @@ class GaussianMLPPolicy(StochasticPolicy, LayersPowered, Serializable):
 
     def get_actions(self, observations):
         flat_obs = self.observation_space.flatten_n(observations)
-        means, log_stds = self._f_dist(flat_obs)
+        means, log_stds = self._f_dist(flat_obs) # _f_dist runs the network forward.
         rnd = np.random.normal(size=means.shape)
         actions = rnd * np.exp(log_stds) + means
         return actions, dict(mean=means, log_std=log_stds)
@@ -179,6 +183,7 @@ class GaussianMLPPolicy(StochasticPolicy, LayersPowered, Serializable):
         :param old_dist_info_vars:
         :return:
         """
+        import pdb; pdb.set_trace()
         new_dist_info_vars = self.dist_info_sym(obs_var, action_var)
         new_mean_var, new_log_std_var = new_dist_info_vars["mean"], new_dist_info_vars["log_std"]
         old_mean_var, old_log_std_var = old_dist_info_vars["mean"], old_dist_info_vars["log_std"]

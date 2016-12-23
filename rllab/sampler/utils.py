@@ -4,6 +4,7 @@ import time
 
 
 def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1):
+    # NOTE - not used... (with vpg_point)
     observations = []
     actions = []
     rewards = []

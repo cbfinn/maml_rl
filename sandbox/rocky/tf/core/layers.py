@@ -404,6 +404,41 @@ class DenseLayer(Layer):
         return self.nonlinearity(activation)
 
 
+class FastDenseLayer(DenseLayer):
+    # TODO - remove init if not needed
+    def __init__(self, **kwargs):
+        super(FastDenseLayer, self).__init__(**kwargs)
+        # The difference, to be added to the weight vector.
+        self.updated_W = None
+        self.updated_b = None
+
+    def set_updated_weights(W_update, b_update):
+        self.updated_W = self.W + W_update
+        self.updated_b = self.b + b_update
+
+    def get_output_for(self, input, **kwargs):
+        if input.get_shape().ndims > 2:
+            # if the input has more than two dimensions, flatten it into a
+            # batch of feature vectors.
+            input = tf.reshape(input, tf.pack([tf.shape(input)[0], -1]))
+        activation = tf.matmul(input, self.updated_W)
+        if self.b is not None:
+            activation = activation + tf.expand_dims(self.updated_b, 0)
+        return self.nonlinearity(activation)
+
+
+    #def get_output_for(self, input, W_diff, b_diff, **kwargs):
+    #    if input.get_shape().ndims > 2:
+    #        # if the input has more than two dimensions, flatten it into a
+    #        # batch of feature vectors.
+    #        input = tf.reshape(input, tf.pack([tf.shape(input)[0], -1]))
+    #    # TODO - might be better to just adjust the parameters directly??
+    #    activation = tf.matmul(input, (self.W+W_diff))
+    #    if self.b is not None:
+    #        activation = activation + tf.expand_dims(self.b+b_diff, 0)
+    #    return self.nonlinearity(activation)
+
+
 class BaseConvLayer(Layer):
     def __init__(self, incoming, num_filters, filter_size, stride=1, pad="VALID",
                  untie_biases=False,
@@ -525,6 +560,29 @@ class Conv2DLayer(BaseConvLayer):
     def convolve(self, input, **kwargs):
         conved = self.convolution(input, self.W, strides=(1,) + self.stride + (1,), padding=self.pad)
         return conved
+
+
+# TODO - batch norm?
+class FastConv2DLayer(Conv2DLayer):
+    def get_output_for(self, input, W_diff, b_diff, **kwargs):
+        conved = self.convolve(input, W_diff, **kwargs)
+
+        if self.b is None:
+            activation = conved
+        elif self.untie_biases:
+            # raise NotImplementedError
+            activation = conved + tf.expand_dims(self.b+b_diff, 0)
+        else:
+            activation = conved + tf.reshape(self.b+b_diff, (1, 1, 1, self.num_filters))
+
+        return self.nonlinearity(activation)
+
+    def convolve(self, input, W_diff, **kwargs):
+        conved = self.convolution(input, self.W+W_diff, strides=(1,) + self.stride + (1,), padding=self.pad)
+        return conved
+
+
+
 
 
 def pool_output_length(input_length, pool_size, stride, pad):

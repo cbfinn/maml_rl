@@ -53,7 +53,7 @@ class VPG(BatchPolopt, Serializable):
             ndim=1 + is_recurrent,
             dtype=theano.config.floatX
         )
-        dist = self.policy.distribution
+        dist = self.policy.distribution  # TODO - this needs to be the dist of the fast policies.
         old_dist_info_vars = {
             k: ext.new_tensor(
                 'old_%s' % k,
@@ -120,7 +120,7 @@ class VPG(BatchPolopt, Serializable):
             inputs += (samples_data["valids"],)
         dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
         loss_before = self.optimizer.loss(inputs)
-        self.optimizer.optimize(inputs)
+        self.optimizer.optimize(inputs)  # TODO - actual optimize step happens here?
         loss_after = self.optimizer.loss(inputs)
         logger.record_tabular("LossBefore", loss_before)
         logger.record_tabular("LossAfter", loss_after)

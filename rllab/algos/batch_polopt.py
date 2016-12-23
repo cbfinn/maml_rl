@@ -22,11 +22,13 @@ class BatchSampler(BaseSampler):
     def obtain_samples(self, itr):
         cur_params = self.algo.policy.get_param_values()
         paths = parallel_sampler.sample_paths(
-            policy_params=cur_params,
+            policy_params=cur_params,  # TODO - can I just pass in new parameters here? (the updated ones?)
             max_samples=self.algo.batch_size,
             max_path_length=self.algo.max_path_length,
             scope=self.algo.scope,
         )
+        # TODO - does the optimizer assume that the paths came from a policy with params cur_params?
+        # Or can I just pass in cur_params - alpha*grads?
         if self.algo.whole_paths:
             return paths
         else:

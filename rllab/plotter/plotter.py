@@ -1,5 +1,5 @@
 import atexit
-from queue import Empty
+from Queue import Empty
 from multiprocessing import Process, Queue
 from rllab.sampler.utils import rollout
 import numpy as np
