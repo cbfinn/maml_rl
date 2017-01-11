@@ -14,10 +14,88 @@ from rllab.misc import logger
 from rllab.misc.tensor_utils import flatten_tensors, unflatten_tensors
 from sandbox.rocky.tf.misc import tensor_utils
 import itertools
+
 import tensorflow as tf
+from tensorflow.contrib.layers.python import layers as tf_layers
 
 # TODO - what does this mean?
 load_params = True
+
+
+
+
+### Start Helper functions ###
+def make_input(shape, input_var=None, name="input", **kwargs):
+    if input_var is None:
+        if name is not None:
+            with tf.variable_scope(name):
+                    input_var = tf.placeholder(tf.float32, shape=shape, name="input")
+        else:
+            input_var = tf.placeholder(tf.float32, shape=shape, name="input")
+    return input_var
+
+def _create_param(spec, shape, name, trainable=True, regularizable=True):
+    if not hasattr(spec, '__call__'):
+        assert isinstance(spec, (tf.Tensor, tf.Variable))
+        return spec
+    assert hasattr(spec, '__call__')
+    if regularizable:
+        regularizer = None
+    else:
+        regularizer = lambda _: tf.constant(0.)
+    return tf.get_variable(
+        name=name, shape=shape, initializer=spec, trainable=trainable,
+        regularizer=regularizer, dtype=tf.float32
+    )
+
+def add_param(spec, shape, layer_name, name, weight_norm=None, variable_reuse=None, **tags):
+    with tf.variable_scope(layer_name, reuse=variable_reuse):
+        tags['trainable'] = tags.get('trainable', True)
+        tags['regularizable'] = tags.get('regularizable', True)
+        param = _create_param(spec, shape, name, **tags)
+        #self.params[param] = set(tag for tag, value in list(tags.items()) if value)
+    if weight_norm: # TODO
+        raise NotImplementedError('Chelsea does not support this.')
+    return param
+
+def make_dense_layer(input_shape, num_units, name='fc', W=L.XavierUniformInitializer(), b=tf.zeros_initializer, weight_norm=False, **kwargs):
+
+    # make parameters
+    num_inputs = int(np.prod(input_shape[1:]))
+    W = add_param(W, (num_inputs, num_units), layer_name=name, name='W', weight_norm=weight_norm)
+    if b is not None:
+        b = add_param(b, (num_units,), layer_name=name, name='b', regularizable=False, weight_norm=weight_norm)
+    output_shape = (input_shape[0], num_units)
+    return W,b, output_shape
+
+def forward_dense_layer(input, W, b, nonlinearity=tf.identity, batch_norm=False, scope='', reuse=True, is_training=False):
+    # compute output tensor
+    if input.get_shape().ndims > 2:
+        # if the input has more than two dimensions, flatten it into a
+        # batch of feature vectors.
+        input = tf.reshape(input, tf.pack([tf.shape(input)[0], -1]))
+    activation = tf.matmul(input, W)
+    if b is not None:
+        activation = activation + tf.expand_dims(b, 0)
+
+    if batch_norm:
+        return tf_layers.batch_norm(activation, activation_fn=nonlinearity, reuse=reuse, scope=scope, is_training=is_training)
+    else:
+        return nonlinearity(activation)
+
+def make_param_layer(num_units, name='', param=tf.zeros_initializer, trainable=True):
+    param = add_param(param, (num_units,), layer_name=name, name='param', trainable=trainable)
+    return param
+
+def forward_param_layer(input, param):
+    ndim = input.get_shape().ndims
+    num_units = int(param.get_shape()[0])
+    reshaped_param = tf.reshape(param, (1,)*(ndim-1)+(num_units,))
+    tile_arg = tf.concat(0, [tf.shape(input)[:ndim-1], [1]])
+    tiled = tf.tile(reshaped_param, tile_arg)
+    return tiled
+### End Helper functions ###
+
 
 class GaussianMLPPolicy(StochasticPolicy, Serializable):
     def __init__(
@@ -33,7 +111,7 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
             min_std=1e-6,
             std_hidden_nonlinearity=tf.nn.tanh,
             hidden_nonlinearity=tf.nn.tanh,
-            output_nonlinearity=None,
+            output_nonlinearity=tf.identity,
             mean_network=None,
             std_network=None,
             std_parametrization='exp'
@@ -60,57 +138,60 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
         Serializable.quick_init(self, locals())
         assert isinstance(env_spec.action_space, Box)
 
-        with tf.variable_scope(name):
+        obs_dim = env_spec.observation_space.flat_dim
+        action_dim = env_spec.action_space.flat_dim
 
-            obs_dim = env_spec.observation_space.flat_dim
-            action_dim = env_spec.action_space.flat_dim
+        # create network
+        if mean_network is None:
+            self.mean_params = mean_params = self.create_MLP(
+                name="mean_network",
+                input_shape=(None, obs_dim,),
+                output_dim=action_dim,
+                hidden_sizes=hidden_sizes,
+            )
+            #input_tensor = make_input(shape=(None, obs_dim,), input_var=None, name='input')
+            input_tensor, mean_tensor = self.forward_MLP('mean_network', mean_params, n_hidden=len(hidden_sizes),
+                input_shape=(obs_dim,),
+                hidden_nonlinearity=hidden_nonlinearity,
+                output_nonlinearity=output_nonlinearity,
+                reuse=None # Needed for batch norm
+            )
+            # if you want to input your own thing.
+            self._forward_mean = lambda x, is_train: self.forward_MLP('mean_network', mean_params, n_hidden=len(hidden_sizes),
+                hidden_nonlinearity=hidden_nonlinearity, output_nonlinearity=output_nonlinearity, input_tensor=x, is_training=is_train)[1]
+        else:
+            raise NotImplementedError('Chelsea does not support this.')
 
-            # create network
-            if mean_network is None:
-                # returns layers(), input_layer, output_layer, input_var, output
-                mean_network = self.create_MLP(
-                    name="mean_network",
-                    input_shape=(obs_dim,),
+        if std_network is not None:
+            raise NotImplementedError('Contained Gaussian MLP does not support this.')
+        else:
+            if adaptive_std:
+                # NOTE - this isn't tested.
+                self.std_params = std_params = self.create_MLP(
+                    name="std_network",
+                    input_shape=(None, obs_dim,),
                     output_dim=action_dim,
-                    hidden_sizes=hidden_sizes,
-                    hidden_nonlinearity=hidden_nonlinearity,
-                    output_nonlinearity=output_nonlinearity,
+                    hidden_sizes=std_hidden_sizes,
                 )
+                # if you want to input your own thing.
+                self._forward_std = lambda x: self.forward_MLP('std_network', std_params, n_hidden=len(hidden_sizes),
+                                                                  hidden_nonlinearity=std_hidden_nonlinearity,
+                                                                output_nonlinearity=tf.identity,
+                                                                input_tensor=x)[1]
             else:
-                raise NotImplementedError('Chelsea does not support this.')
-            l_mean = mean_network[2]
-            obs_var = mean_network[3]
-
-            if std_network is not None:
-                raise NotImplementedError('Contained Gaussian MLP does not support this.')
-                l_std_param = std_network.output_layer
-            else:
-                if adaptive_std:
-                    # returns layers(), input_layer, output_layer, input_var, output
-                    std_network = self.create_MLP(
-                        name="std_network",
-                        input_shape=(obs_dim,),
-                        input_layer=mean_network[1],
-                        output_dim=action_dim,
-                        hidden_sizes=std_hidden_sizes,
-                        hidden_nonlinearity=std_hidden_nonlinearity,
-                        output_nonlinearity=None,
-                    )
-                    l_std_param = std_network[2]
+                if std_parametrization == 'exp':
+                    init_std_param = np.log(init_std)
+                elif std_parametrization == 'softplus':
+                    init_std_param = np.log(np.exp(init_std) - 1)
                 else:
-                    if std_parametrization == 'exp':
-                        init_std_param = np.log(init_std)
-                    elif std_parametrization == 'softplus':
-                        init_std_param = np.log(np.exp(init_std) - 1)
-                    else:
-                        raise NotImplementedError
-                    l_std_param = L.ParamLayer(
-                        mean_network[1],
-                        num_units=action_dim,
-                        param=tf.constant_initializer(init_std_param),
-                        name="output_std_param",
-                        trainable=learn_std,
-                    )
+                    raise NotImplementedError
+                std_params = make_param_layer(
+                    num_units=action_dim,
+                    param=tf.constant_initializer(init_std_param),
+                    name="output_std_param",
+                    trainable=learn_std,
+                )
+                self._forward_std = lambda x: forward_param_layer(x, std_params)
 
             self.std_parametrization = std_parametrization
 
@@ -123,45 +204,33 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
 
             self.min_std_param = min_std_param
 
-            self._l_mean = l_mean
-            self._l_std_param = l_std_param
-
             self._dist = DiagonalGaussian(action_dim)
 
-            # LayersPowered.__init__(self, [l_mean, l_std_param])
-            self._output_layers = [l_mean, l_std_param]
-            #self._input_layers = None
-            # Parameterized.__init__(self)
             self._cached_params = {}
-            #self._cached_param_dtypes = {} #self._cached_param_shapes = {} #self._cached_assign_ops = {} #self._cached_assign_placeholders = {}
 
             super(GaussianMLPPolicy, self).__init__(env_spec)
 
-            dist_info_sym = self.dist_info_sym(mean_network[3], dict())
+            dist_info_sym = self.dist_info_sym(input_tensor, dict(), is_training=False)
             mean_var = dist_info_sym["mean"]
             log_std_var = dist_info_sym["log_std"]
 
-            def f_dist(*input_vals):
-                sess = tf.get_default_session()
-                return sess.run([mean_var, log_std_var],
-                                feed_dict=dict(list(zip([obs_var], input_vals))))
-            self._f_dist = f_dist
-
-            #self._f_dist = tensor_utils.compile_function(
-            #    inputs=[obs_var],
-            #    outputs=[mean_var, log_std_var],
-            #)
+            self._f_dist = tensor_utils.compile_function(  # this probably also works...
+                inputs=[input_tensor],
+                outputs=[mean_var, log_std_var],
+            )
 
     @property
     def vectorized(self):
         return True
 
-    def dist_info_sym(self, obs_var, state_info_vars=None):
+    def dist_info_sym(self, obs_var, state_info_vars=None, is_training=True):
         # This function constructs the tf graph, only called during beginning of training
         # obs_var - observation tensor
         # mean_var - tensor for policy mean
         # std_param_var - tensor for policy std before output
-        mean_var, std_param_var = L.get_output([self._l_mean, self._l_std_param], obs_var)
+        #mean_var, std_param_var = L.get_output([self._l_mean, self._l_std_param], obs_var)
+        mean_var = self._forward_mean(obs_var, is_training)
+        std_param_var = self._forward_std(obs_var)
         if self.min_std_param is not None:
             std_param_var = tf.maximum(std_param_var, self.min_std_param)
         if self.std_parametrization == 'exp':
@@ -171,6 +240,7 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
         else:
             raise NotImplementedError
         return dict(mean=mean_var, log_std=log_std_var)
+
 
     @overrides
     def get_action(self, observation):
@@ -192,52 +262,71 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
         return self._dist
 
     def get_params_internal(self, **tags):
-        layers = L.get_all_layers(self._output_layers, treat_as_input=None)
-        params = itertools.chain.from_iterable(l.get_params(**tags) for l in layers)
-        return L.unique(params)
+        if tags.get('trainable', False):
+            return tf.trainable_variables()
+        else:
+            return tf.all_variables()
 
-    def create_MLP(self, name, output_dim, hidden_sizes, hidden_nonlinearity,
-                   output_nonlinearity, hidden_W_init=L.XavierUniformInitializer(), hidden_b_init=tf.zeros_initializer,
+        if regularizable in tags.keys():
+            import pdb; pdb.set_trace()
+
+    # This makes all of the parameters.
+    def create_MLP(self, name, output_dim, hidden_sizes,
+                   hidden_W_init=L.XavierUniformInitializer(), hidden_b_init=tf.zeros_initializer,
                    output_W_init=L.XavierUniformInitializer(), output_b_init=tf.zeros_initializer,
-                   input_var=None, input_layer=None, input_shape=None, batch_normalization=False, weight_normalization=False,
+                   input_shape=None, weight_normalization=False,
                    ):
+        assert input_shape is not None
+        cur_shape = input_shape
         with tf.variable_scope(name):
-            if input_layer is None:
-                l_in = L.InputLayer(shape=(None,) + input_shape, input_var=input_var, name="input")
-            else:
-                l_in = input_layer
-            all_layers = [l_in]
-            l_hid = l_in
-            if batch_normalization:
-                l_hid = L.batch_norm(l_hid)
+            all_params = {}
             for idx, hidden_size in enumerate(hidden_sizes):
-                l_hid = L.DenseLayer(
-                    l_hid,
+                W, b, cur_shape = make_dense_layer(
+                    cur_shape,
                     num_units=hidden_size,
-                    nonlinearity=hidden_nonlinearity,
                     name="hidden_%d" % idx,
                     W=hidden_W_init,
                     b=hidden_b_init,
-                    weight_normalization=weight_normalization
+                    weight_norm=weight_normalization,
                 )
-                if batch_normalization:
-                    l_hid = L.batch_norm(l_hid)
-                all_layers.append(l_hid)
-            l_out = L.DenseLayer(
-                l_hid,
+                all_params['W' + str(idx)] = W
+                all_params['b' + str(idx)] = b
+            W, b, _ = make_dense_layer(
+                cur_shape,
                 num_units=output_dim,
-                nonlinearity=output_nonlinearity,
-                name="output",
+                name='output',
                 W=output_W_init,
                 b=output_b_init,
-                weight_normalization=weight_normalization
+                weight_norm=weight_normalization,
             )
-            if batch_normalization:
-                l_out = L.batch_norm(l_out)
-            all_layers.append(l_out)
-            output = L.get_output(l_out)
-            # returns layers(), input_layer, output_layer, input_var, output
-            return all_layers, l_in, l_out, l_in.input_var, output
+            all_params['W' + str(len(hidden_sizes))] = W
+            all_params['b'+str(len(hidden_sizes))] = b
+
+            return all_params
+
+    def forward_MLP(self, name, all_params, input_tensor=None, input_shape=None, n_hidden=-1,
+                    hidden_nonlinearity=tf.identity, output_nonlinearity=tf.identity,
+                    batch_normalization=False, reuse=True, is_training=False):
+        # is_training and reuse are for batch norm, irrelevant if batch_norm set to False
+        # set reuse to False if the first time this func is called.
+        with tf.variable_scope(name):
+            if input_tensor is None:
+                assert input_shape is not None
+                l_in = make_input(shape=(None,)+input_shape, input_var=None, name='input')
+            else:
+                l_in = input_tensor
+            l_hid = l_in
+            for idx in range(n_hidden):
+                l_hid = forward_dense_layer(l_hid, all_params['W'+str(idx)], all_params['b'+str(idx)],
+                                            batch_norm=batch_normalization,
+                                            nonlinearity=hidden_nonlinearity,
+                                            scope=str(idx), reuse=reuse,
+                                            is_training=is_training
+                                            )
+            output = forward_dense_layer(l_hid, all_params['W'+str(n_hidden)], all_params['b'+str(n_hidden)],
+                                         batch_norm=False, nonlinearity=output_nonlinearity,
+                                         )
+            return l_in, output
 
     def get_params(self, **tags):
         """
