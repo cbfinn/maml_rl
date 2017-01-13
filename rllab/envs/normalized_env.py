@@ -48,8 +48,8 @@ class NormalizedEnv(ProxyEnv, Serializable):
         self._update_reward_estimate(reward)
         return reward / (np.sqrt(self._reward_var) + 1e-8)
 
-    def reset(self):
-        ret = self._wrapped_env.reset()
+    def reset(self, reset_args=None):
+        ret = self._wrapped_env.reset(reset_args=reset_args)
         if self._normalize_obs:
             return self._apply_normalize_obs(ret)
         else:

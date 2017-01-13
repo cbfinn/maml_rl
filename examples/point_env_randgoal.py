@@ -5,6 +5,10 @@ import numpy as np
 
 
 class PointEnvRandGoal(Env):
+    def __init__(self):
+        # TODO - call super class init?
+        self._goal = None
+
     @property
     def observation_space(self):
         return Box(low=-np.inf, high=np.inf, shape=(2,))
@@ -13,10 +17,12 @@ class PointEnvRandGoal(Env):
     def action_space(self):
         return Box(low=-0.1, high=0.1, shape=(2,))
 
-    def reset(self, goal=None):
-        if goal:
+    def reset(self, reset_args=None):
+        goal = reset_args
+        if goal is not None:
             self._goal = goal
-        else:
+        elif self._goal is None:
+            # Only set a new goal if this env hasn't had one defined before.
             self._goal = np.random.uniform(-1, 1, size=(2,))
         self._state = (0, 0) #np.random.uniform(-1, 1, size=(2,))
         observation = np.copy(self._state)

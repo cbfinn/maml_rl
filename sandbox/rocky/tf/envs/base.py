@@ -64,8 +64,8 @@ class VecTfEnv(object):
     def __init__(self, vec_env):
         self.vec_env = vec_env
 
-    def reset(self):
-        return self.vec_env.reset()
+    def reset(self, reset_args=None):
+        return self.vec_env.reset(reset_args)
 
     @property
     def num_envs(self):

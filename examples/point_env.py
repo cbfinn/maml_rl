@@ -13,7 +13,7 @@ class PointEnv(Env):
     def action_space(self):
         return Box(low=-0.1, high=0.1, shape=(2,))
 
-    def reset(self):
+    def reset(self, **kwargs):
         self._state = np.random.uniform(-1, 1, size=(2,))
         observation = np.copy(self._state)
         return observation

@@ -20,7 +20,7 @@ class Env(object):
         """
         raise NotImplementedError
 
-    def reset(self):
+    def reset(self, reset_args=None):
         """
         Resets the state of the environment, returning an initial observation.
         Outputs
