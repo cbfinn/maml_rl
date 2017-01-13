@@ -57,6 +57,7 @@ class FirstOrderOptimizer(Serializable):
         self._train_op = None
 
     def update_opt(self, loss, target, inputs, extra_inputs=None, **kwargs):
+        # Initializes the update opt used in the optimization
         """
         :param loss: Symbolic expression for the loss function.
         :param target: A parameterized object to optimize over. It should implement methods of the
@@ -68,7 +69,17 @@ class FirstOrderOptimizer(Serializable):
 
         self._target = target
 
-        self._train_op = self._tf_optimizer.minimize(loss, var_list=target.get_params(trainable=True))
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        if update_ops:
+            # If using batch norm
+            updates = tf.group(*update_ops)
+            with tf.control_dependencies([updates]):
+
+                self._train_op = self._tf_optimizer.minimize(loss, var_list=target.get_params(trainable=True))
+        else:
+            self._train_op = self._tf_optimizer.minimize(loss, var_list=target.get_params(trainable=True))
+
+        # TODO - make a tensor for the gradients?
 
         # updates = OrderedDict([(k, v.astype(k.dtype)) for k, v in updates.iteritems()])
 
@@ -99,6 +110,8 @@ class FirstOrderOptimizer(Serializable):
 
         start_time = time.time()
 
+        # TODO - need to look into this, and look if extra_inputs handles the case
+        # that I want (for the data needed for computing the gradient)
         dataset = BatchDataset(inputs, self._batch_size, extra_inputs=extra_inputs)
 
         sess = tf.get_default_session()
@@ -109,6 +122,7 @@ class FirstOrderOptimizer(Serializable):
                 progbar = pyprind.ProgBar(len(inputs[0]))
 
             for batch in dataset.iterate(update=True):
+                import pdb; pdb.set_trace()
                 sess.run(self._train_op, dict(list(zip(self._input_vars, batch))))
                 if self._verbose:
                     progbar.update(len(batch[0]))
