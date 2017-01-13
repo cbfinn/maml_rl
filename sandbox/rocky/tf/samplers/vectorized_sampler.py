@@ -36,11 +36,19 @@ class VectorizedSampler(BaseSampler):
     def shutdown_worker(self):
         self.vec_env.terminate()
 
-    def obtain_samples(self, itr):
+    def obtain_samples(self, itr, reset_args=None, return_dict=False):
+        # reset_args: arguments to pass to the environments to reset
+        # return_dict: whether or not to return a dictionary or list form of paths
+
         logger.log("Obtaining samples for iteration %d..." % itr)
-        paths = []
+
+        #paths = []
+        paths = {}
+        for i in range(self.vec_env.num_envs):
+            paths[i] = []
+
         n_samples = 0
-        obses = self.vec_env.reset()
+        obses = self.vec_env.reset(reset_args)
         dones = np.asarray([True] * self.vec_env.num_envs)
         running_paths = [None] * self.vec_env.num_envs
 
@@ -86,7 +94,7 @@ class VectorizedSampler(BaseSampler):
                 running_paths[idx]["env_infos"].append(env_info)
                 running_paths[idx]["agent_infos"].append(agent_info)
                 if done:
-                    paths.append(dict(
+                    paths[idx].append(dict(
                         observations=self.env_spec.observation_space.flatten_n(running_paths[idx]["observations"]),
                         actions=self.env_spec.action_space.flatten_n(running_paths[idx]["actions"]),
                         rewards=tensor_utils.stack_tensor_list(running_paths[idx]["rewards"]),
@@ -104,5 +112,10 @@ class VectorizedSampler(BaseSampler):
         logger.record_tabular("PolicyExecTime", policy_time)
         logger.record_tabular("EnvExecTime", env_time)
         logger.record_tabular("ProcessExecTime", process_time)
+
+        if not return_dict:
+            flatten_list = lambda l: [item for sublist in l for item in sublist]
+            paths = flatten_list(paths.values())
+            #path_keys = flatten_list([[key]*len(paths[key]) for key in paths.keys()])
 
         return paths
