@@ -22,6 +22,7 @@ from tensorflow.contrib.layers.python import layers as tf_layers
 # TODO - what does this mean?
 load_params = True
 
+STEP_SIZE = 1.0
 
 
 
@@ -232,45 +233,47 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
     def vectorized(self):
         return True
 
-    def set_init_surr_obj(self, input_list, surr_obj_tensor):
+    #def set_init_surr_obj(self, input_list, surr_obj_tensor):
+    #    self.input_list_for_grad = input_list
+    #    self.surr_obj = surr_obj_tensor
+
+    def set_init_surr_obj(self, input_list, surr_objs_tensor):
         self.input_list_for_grad = input_list
-        self.surr_obj = surr_obj_tensor
+        self.surr_objs = surr_objs_tensor
+
 
     def compute_updated_dists(self, samples):
         """ Compute fast gradients once and pull them out of tensorflow for sampling.
         """
-        STEP_SIZE = 0.001
         self._updated_f_dists = {}
+        num_tasks = len(samples)
+        param_keys = self.all_params.keys()
+        sess = tf.get_default_session()
 
-        # TODO - brainstorming
-        #obs_list, action_list, adv_list = [], [], []
-        #for sample_key in samples.keys():
-        #    inputs = ext.extract(samples[sample_key],
-        #            'observations', 'actions', 'advantages')
-        #    obs_list.append(inputs[0])
-        #    action_list.append(inputs[1])
-        #    adv_list.append(inputs[2])
+        obs_list, action_list, adv_list = [], [], []
+        for i in range(num_tasks):
+            inputs = ext.extract(samples[i],
+                    'observations', 'actions', 'advantages')
+            obs_list.append(inputs[0])
+            action_list.append(inputs[1])
+            adv_list.append(inputs[2])
 
+        inputs = obs_list + action_list + adv_list
 
-        for sample_key in samples.keys():
-            inputs = ext.extract(
-                samples[sample_key],
-                "observations", "actions", "advantages"
-            )
-            param_keys = self.all_params.keys()
-            gradients = dict(zip(param_keys, tf.gradients(self.surr_obj, self.all_params.values())))
+        all_fast_params_tensor = []
+        for i in range(num_tasks):
+            gradients = dict(zip(param_keys, tf.gradients(self.surr_objs[i], self.all_params.values())))
             fast_params_tensor = dict(zip(param_keys, [self.all_params[key] - STEP_SIZE*gradients[key] for key in param_keys]))
+            all_fast_params_tensor.append(fast_params_tensor)
+        fast_params_per_task = sess.run(all_fast_params_tensor, feed_dict=dict(list(zip(self.input_list_for_grad, inputs))))
 
-            #self.updated_dist_info_sym = lambda obs_var: self.dist_info_sym(obs_var, all_params=fast_params_tensor)
+        for i in range(num_tasks):
 
-            sess = tf.get_default_session()
-            fast_params = sess.run(fast_params_tensor, feed_dict=dict(list(zip(self.input_list_for_grad, inputs))))
-
-            info = self.dist_info_sym(self.input_tensor, dict(), all_params=fast_params,
+            info = self.dist_info_sym(self.input_tensor, dict(), all_params=fast_params_per_task[i],
                     is_training=False)
 
             # before sensitive update
-            self._updated_f_dists[sample_key] = tensor_utils.compile_function(
+            self._updated_f_dists[i] = tensor_utils.compile_function(
                 inputs=[self.input_tensor],
                 outputs=[info['mean'], info['log_std']],
             )
@@ -300,17 +303,15 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
             raise NotImplementedError
         return dict(mean=mean_var, log_std=log_std_var)
 
-    def updated_dist_info_sym(self, init_obs_var, init_surr_obj, new_obs_var, init_params=None):
-        if init_params is None:
-            init_params = self.all_params
+    def updated_dist_info_sym(self, init_obs_var, init_surr_obj, new_obs_var, is_training=True):
+        # symbolically create sensitive learning graph, for the meta-optimization
+        init_params = self.all_params
 
-        for sample_key in samples.keys():
-            param_keys = init_params.keys()
-            gradients = dict(zip(param_keys, tf.gradients(self.surr_obj, init_params.values())))
-            fast_params_tensor = dict(zip(param_keys, [self.all_params[key] - STEP_SIZE*gradients[key] for key in param_keys]))
+        param_keys = init_params.keys()
+        gradients = dict(zip(param_keys, tf.gradients(init_surr_obj, init_params.values())))
+        fast_params_tensor = dict(zip(param_keys, [init_params[key] - STEP_SIZE*gradients[key] for key in param_keys]))
 
-        return self.dist_info_sym(new_obs_var, all_params=fast_params_tensor)
-
+        return self.dist_info_sym(new_obs_var, all_params=fast_params_tensor, is_training=is_training)
 
 
     @overrides

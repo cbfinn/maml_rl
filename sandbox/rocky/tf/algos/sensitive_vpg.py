@@ -43,22 +43,6 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
         # TODO Commented out all KL stuff for now, since it is only used for logging
         is_recurrent = int(self.policy.recurrent)
         num_tasks = 10 # TODO - don't hardcode
-
-        init_obs_vars, init_action_vars, init_adv_vars = [], [], []
-        for i in range(num_tasks):
-            init_obs_vars.append(self.env.observation_space.new_tensor_variable(
-                'init_obs' + str(i),
-                extra_dims=1 + is_recurrent,
-            ))
-            init_action_vars.append(self.env.action_space.new_tensor_variable(
-                'init_action' + str(i),
-                extra_dims=1 + is_recurrent,
-            ))
-            init_adv_vars.append(tensor_utils.new_tensor(
-                name='init_advantage' + str(i),
-                ndim=1 + is_recurrent,
-                dtype=tf.float32,
-            ))
         dist = self.policy.distribution
 
         #old_dist_info_vars = {
@@ -81,28 +65,49 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
         #else:
         #    valid_var = None
 
-        # Only need one for computing each of the gradients for sampling.
-        init_dist_info_vars = self.policy.dist_info_sym(init_obs_vars[0], state_info_vars)
-        logli = dist.log_likelihood_sym(init_action_vars[0], init_dist_info_vars)
-        #kl = dist.kl_sym(old_dist_info_vars, init_dist_info_vars)
+        init_obs_vars, init_action_vars, init_adv_vars = [], [], []
+        init_surr_objs = []
+        for i in range(num_tasks):
+            init_obs_vars.append(self.env.observation_space.new_tensor_variable(
+                'init_obs' + str(i),
+                extra_dims=1 + is_recurrent,
+            ))
+            init_action_vars.append(self.env.action_space.new_tensor_variable(
+                'init_action' + str(i),
+                extra_dims=1 + is_recurrent,
+            ))
+            init_adv_vars.append(tensor_utils.new_tensor(
+                name='init_advantage' + str(i),
+                ndim=1 + is_recurrent,
+                dtype=tf.float32,
+            ))
 
-        # formulate as a minimization problem
-        # The gradient of the surrogate objective is the policy gradient
-        if is_recurrent:
-            init_surr_obj = - tf.reduce_sum(logli * init_adv_vars[0] * valid_var) / tf.reduce_sum(valid_var)
-            #mean_kl = tf.reduce_sum(kl * valid_var) / tf.reduce_sum(valid_var)
-            #max_kl = tf.reduce_max(kl * valid_var)
-        else:
-            init_surr_obj = - tf.reduce_mean(logli * init_adv_vars[0])
-            #mean_kl = tf.reduce_mean(kl)
-            #max_kl = tf.reduce_max(kl)
+            init_dist_info_vars = self.policy.dist_info_sym(init_obs_vars[i], state_info_vars)
+            logli = dist.log_likelihood_sym(init_action_vars[i], init_dist_info_vars)
+            #kl = dist.kl_sym(old_dist_info_vars, init_dist_info_vars)
 
-        input_list = [init_obs_vars[0], init_action_vars[0], init_adv_vars[0]] + state_info_vars_list
+            # formulate as a minimization problem
+            # The gradient of the surrogate objective is the policy gradient
+            if is_recurrent:
+                init_surr_objs.append(- tf.reduce_sum(logli * init_adv_vars[i] * valid_var) / tf.reduce_sum(valid_var))
+                #mean_kl = tf.reduce_sum(kl * valid_var) / tf.reduce_sum(valid_var)
+                #max_kl = tf.reduce_max(kl * valid_var)
+            else:
+                init_surr_objs.append(- tf.reduce_mean(logli * init_adv_vars[i]))
+                #mean_kl = tf.reduce_mean(kl)
+                #max_kl = tf.reduce_max(kl)
+
+        # For computing the fast update for sampling
+        #input_list = [init_obs_vars[0], init_action_vars[0], init_adv_vars[0]] + state_info_vars_list
+        #self.policy.set_init_surr_obj(input_list, init_surr_objs[0])
+        input_list = init_obs_vars + init_action_vars + init_adv_vars + state_info_vars_list
+        self.policy.set_init_surr_obj(input_list, init_surr_objs)
+
         #if is_recurrent:
         #    input_list.append(valid_var)
-        self.policy.set_init_surr_obj(input_list, init_surr_obj)
 
         obs_vars, action_vars, adv_vars = [], [], []
+        surr_objs = []
         for i in range(num_tasks):
             obs_vars.append(self.env.observation_space.new_tensor_variable(
                 'obs' + str(i),
@@ -117,12 +122,15 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
                 ndim=1 + is_recurrent,
                 dtype=tf.float32,
             ))
-            #dist_info_vars = self.policy.dist_info_sym(init_obs_vars[0], state_info_vars)
-            #logli = dist.log_likelihood_sym(init_action_var, init_dist_info_vars)
+            dist_info_vars = self.policy.updated_dist_info_sym(init_obs_vars[i], init_surr_objs[i], obs_vars[i], state_info_vars)
+            logli = dist.log_likelihood_sym(action_vars[i], dist_info_vars)
+            surr_objs.append(- tf.reduce_mean(logli * adv_vars[i]))
 
 
-        # TODO - this initializes the update opt used.
-        #self.optimizer.update_opt(loss=surr_obj, target=self.policy, inputs=input_list)
+        surr_obj = tf.reduce_mean(tf.pack(surr_objs, 0))
+
+        new_input_list = input_list + obs_vars + action_vars + adv_vars
+        self.optimizer.update_opt(loss=surr_obj, target=self.policy, inputs=new_input_list)
 
         #f_kl = tensor_utils.compile_function(
         #    inputs=input_list + old_dist_info_vars_list,
@@ -136,21 +144,38 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
     @overrides
     def optimize_policy(self, itr, init_samples_data, updated_samples_data):
         # TODO - this function should update self.policy._pre_update_dist (the learner's parameters)
-        import pdb; pdb.set_trace()
         logger.log("optimizing policy")
-        inputs = ext.extract(
-            samples_data,
-            "observations", "actions", "advantages"
-        )
-        agent_infos = samples_data["agent_infos"]
-        state_info_list = [agent_infos[k] for k in self.policy.state_info_keys]
-        inputs += tuple(state_info_list)
-        if self.policy.recurrent:
-            inputs += (samples_data["valids"],)
-        dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
+        num_tasks = len(init_samples_data)
+
+        init_obs_list, init_action_list, init_adv_list = [], [], []
+        for i in range(num_tasks):
+            inputs = ext.extract(
+                init_samples_data[i],
+                "observations", "actions", "advantages"
+            )
+            init_obs_list.append(inputs[0])
+            init_action_list.append(inputs[1])
+            init_adv_list.append(inputs[2])
+
+        obs_list, action_list, adv_list = [], [], []
+        for i in range(num_tasks):
+            inputs = ext.extract(
+                updated_samples_data[i],
+                "observations", "actions", "advantages"
+            )
+            obs_list.append(inputs[0])
+            action_list.append(inputs[1])
+            adv_list.append(inputs[2])
+
+        inputs = init_obs_list + init_action_list + init_adv_list + obs_list + action_list + adv_list
+
+        #agent_infos = init_samples_data["agent_infos"]
+        #state_info_list = [agent_infos[k] for k in self.policy.state_info_keys]
+        #inputs += tuple(state_info_list)
+        #if self.policy.recurrent:
+        #    inputs += (samples_data["valids"],)
+        #dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
         loss_before = self.optimizer.loss(inputs)
-        # pass in gradient info as extra inputs? Need to keep track of which policy was used too.
-        # TODO - maybe reformulate the surr_obj as the sum of N objs?
         self.optimizer.optimize(inputs)
         loss_after = self.optimizer.loss(inputs)
         logger.record_tabular("LossBefore", loss_before)

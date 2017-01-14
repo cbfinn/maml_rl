@@ -24,7 +24,7 @@ class BatchSensitivePolopt(RLAlgorithm):
             scope=None,
             n_itr=500,
             start_itr=0,
-            batch_size=5000,  # meta_batch_size of 10
+            batch_size=5000,  # meta_batch_size of 10 (because max path length is 500)
             max_path_length=500,
             discount=0.99,
             gae_lambda=1,
@@ -106,8 +106,8 @@ class BatchSensitivePolopt(RLAlgorithm):
         assert type(paths) == dict
         return paths
 
-    def process_samples(self, itr, paths):
-        return self.sampler.process_samples(itr, paths)
+    def process_samples(self, itr, paths, log=True):
+        return self.sampler.process_samples(itr, paths, log=log)
 
     def train(self):
         # TODO - make this a util
@@ -129,7 +129,9 @@ class BatchSensitivePolopt(RLAlgorithm):
                     logger.log("Processing samples...")
                     init_samples_data = {}
                     for key in paths.keys():
-                        init_samples_data[key] = self.process_samples(itr, paths[key])
+                        init_samples_data[key] = self.process_samples(itr, paths[key], log=False)
+                    # for logging purposes only
+                    self.process_samples(itr, flatten_list(paths.values()), log=True)
                     logger.log("Logging pre-update diagnostics...")
                     self.log_diagnostics(flatten_list(paths.values()))
 
@@ -141,18 +143,19 @@ class BatchSensitivePolopt(RLAlgorithm):
                     logger.log("Processing samples...")
                     updated_samples_data = {}
                     for key in paths.keys():
-                        updated_samples_data[key] = self.process_samples(itr, paths[key])
+                        updated_samples_data[key] = self.process_samples(itr, paths[key], log=False)
+                    # for logging purposes only
+                    self.process_samples(itr, flatten_list(paths.values()), log=True)
                     logger.log("Logging post-update diagnostics...")
                     self.log_diagnostics(flatten_list(paths.values()))
 
-                    import pdb; pdb.set_trace()
                     logger.log("Optimizing policy...")
                     # This needs to take both init_samples_data and samples_data
                     self.optimize_policy(itr, init_samples_data, updated_samples_data)
                     logger.log("Saving snapshot...")
-                    params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
+                    params = self.get_itr_snapshot(itr, updated_samples_data)  # , **kwargs)
                     if self.store_paths:
-                        params["paths"] = samples_data["paths"]
+                        params["paths"] = updated_samples_data["paths"]
                     logger.save_itr_params(itr, params)
                     logger.log("Saved")
                     logger.record_tabular('Time', time.time() - start_time)

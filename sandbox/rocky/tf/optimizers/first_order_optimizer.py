@@ -110,8 +110,6 @@ class FirstOrderOptimizer(Serializable):
 
         start_time = time.time()
 
-        # TODO - need to look into this, and look if extra_inputs handles the case
-        # that I want (for the data needed for computing the gradient)
         dataset = BatchDataset(inputs, self._batch_size, extra_inputs=extra_inputs)
 
         sess = tf.get_default_session()
@@ -122,7 +120,6 @@ class FirstOrderOptimizer(Serializable):
                 progbar = pyprind.ProgBar(len(inputs[0]))
 
             for batch in dataset.iterate(update=True):
-                import pdb; pdb.set_trace()
                 sess.run(self._train_op, dict(list(zip(self._input_vars, batch))))
                 if self._verbose:
                     progbar.update(len(batch[0]))
