@@ -1,25 +1,24 @@
 #from rllab.algos.vpg import VPG
-from sandbox.rocky.tf.algos.vpg import VPG
+from sandbox.rocky.tf.algos.sensitive_vpg import SensitiveVPG
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from examples.point_env import PointEnv
 from examples.point_env_randgoal import PointEnvRandGoal
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import stub, run_experiment_lite
 #from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
-#from sandbox.rocky.tf.policies.gaussian_mlp_policy import GaussianMLPPolicy
-from sandbox.rocky.tf.policies.minimal_gauss_mlp_policy import GaussianMLPPolicy
+from sandbox.rocky.tf.policies.sens_minimal_gauss_mlp_policy import SensitiveGaussianMLPPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
 
 stub(globals())
 
 #env = TfEnv(normalize(PointEnv()))
 env = TfEnv(normalize(PointEnvRandGoal()))
-policy = GaussianMLPPolicy(
+policy = SensitiveGaussianMLPPolicy(
     name="policy",
     env_spec=env.spec,
 )
 baseline = LinearFeatureBaseline(env_spec=env.spec)
-algo = VPG(
+algo = SensitiveVPG(
     env=env,
     policy=policy,
     baseline=baseline,

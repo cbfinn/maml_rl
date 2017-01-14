@@ -45,7 +45,7 @@ class BaseSampler(Sampler):
         """
         self.algo = algo
 
-    def process_samples(self, itr, paths):
+    def process_samples(self, itr, paths, log=True):
         baselines = []
         returns = []
 
@@ -160,23 +160,26 @@ class BaseSampler(Sampler):
                 paths=paths,
             )
 
-        logger.log("fitting baseline...")
+        if log:
+            logger.log("fitting baseline...")
         if hasattr(self.algo.baseline, 'fit_with_samples'):
             self.algo.baseline.fit_with_samples(paths, samples_data)
         else:
             self.algo.baseline.fit(paths)
-        logger.log("fitted")
+        if log:
+            logger.log("fitted")
 
-        logger.record_tabular('Iteration', itr)
-        logger.record_tabular('AverageDiscountedReturn',
-                              average_discounted_return)
-        logger.record_tabular('AverageReturn', np.mean(undiscounted_returns))
-        logger.record_tabular('ExplainedVariance', ev)
-        logger.record_tabular('NumTrajs', len(paths))
-        logger.record_tabular('Entropy', ent)
-        logger.record_tabular('Perplexity', np.exp(ent))
-        logger.record_tabular('StdReturn', np.std(undiscounted_returns))
-        logger.record_tabular('MaxReturn', np.max(undiscounted_returns))
-        logger.record_tabular('MinReturn', np.min(undiscounted_returns))
+        if log:
+            #logger.record_tabular('Iteration', itr)
+            #logger.record_tabular('AverageDiscountedReturn',
+            #                      average_discounted_return)
+            logger.record_tabular('AverageReturn', np.mean(undiscounted_returns))
+            #logger.record_tabular('ExplainedVariance', ev)
+            #logger.record_tabular('NumTrajs', len(paths))
+            #logger.record_tabular('Entropy', ent)
+            #logger.record_tabular('Perplexity', np.exp(ent))
+            logger.record_tabular('StdReturn', np.std(undiscounted_returns))
+            #logger.record_tabular('MaxReturn', np.max(undiscounted_returns))
+            #logger.record_tabular('MinReturn', np.min(undiscounted_returns))
 
         return samples_data
