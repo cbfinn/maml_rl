@@ -71,17 +71,13 @@ class FirstOrderOptimizer(Serializable):
 
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         if update_ops:
-            # If using batch norm
+            # for batch norm
             updates = tf.group(*update_ops)
             with tf.control_dependencies([updates]):
 
                 self._train_op = self._tf_optimizer.minimize(loss, var_list=target.get_params(trainable=True))
         else:
             self._train_op = self._tf_optimizer.minimize(loss, var_list=target.get_params(trainable=True))
-
-        # TODO - make a tensor for the gradients?
-
-        # updates = OrderedDict([(k, v.astype(k.dtype)) for k, v in updates.iteritems()])
 
         if extra_inputs is None:
             extra_inputs = list()
