@@ -164,7 +164,7 @@ class BatchSensitivePolopt(RLAlgorithm):
                     logger.log("Saved")
                     logger.record_tabular('Time', time.time() - start_time)
                     logger.record_tabular('ItrTime', time.time() - itr_start_time)
-                    if itr % 2 == 0:
+                    if self.plot and itr % 2 == 0:
                         logger.log("Saving visualization of paths")
                         import matplotlib.pyplot as plt;
                         for ind in range(5):
