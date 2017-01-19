@@ -21,10 +21,13 @@ class PointEnvRandGoal(Env):
         goal = reset_args
         if goal is not None:
             self._goal = goal
-        elif self._goal is None:
+        #elif self._goal is None:
+        else:
             # Only set a new goal if this env hasn't had one defined before.
-            self._goal = np.random.uniform(-1, 1, size=(2,))
-        self._state = (0, 0) #np.random.uniform(-1, 1, size=(2,))
+            self._goal = np.random.uniform(0, 1, size=(2,))
+            self._goal[1] = 0
+
+        self._state = (0, 0)
         observation = np.copy(self._state)
         return observation
 
