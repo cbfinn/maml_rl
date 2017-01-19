@@ -27,7 +27,10 @@ class BatchSampler(BaseSampler):
     def obtain_samples(self, itr):
         cur_policy_params = self.algo.policy.get_param_values()
         if hasattr(self.algo.env,"get_param_values"):
-            cur_env_params = self.algo.env.get_param_values()
+            try:
+                cur_env_params = self.algo.env.get_param_values()
+            except:
+                cur_env_params = None
         else:
             cur_env_params = None
         paths = parallel_sampler.sample_paths(
