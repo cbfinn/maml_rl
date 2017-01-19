@@ -22,7 +22,6 @@ from tensorflow.contrib.layers.python import layers as tf_layers
 # TODO - what does this mean?
 load_params = True
 
-STEP_SIZE = 1.0
 
 
 
@@ -55,8 +54,7 @@ def add_param(spec, shape, layer_name, name, weight_norm=None, variable_reuse=No
         tags['trainable'] = tags.get('trainable', True)
         tags['regularizable'] = tags.get('regularizable', True)
         param = _create_param(spec, shape, name, **tags)
-        #self.params[param] = set(tag for tag, value in list(tags.items()) if value)
-    if weight_norm: # TODO
+    if weight_norm:
         raise NotImplementedError('Chelsea does not support this.')
     return param
 
@@ -117,7 +115,8 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
             output_nonlinearity=tf.identity,
             mean_network=None,
             std_network=None,
-            std_parametrization='exp'
+            std_parametrization='exp',
+            grad_step_size=1.0,
     ):
         """
         :param env_spec:
@@ -136,6 +135,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         :param std_parametrization: how the std should be parametrized. There are a few options:
             - exp: the logarithm of the std will be stored, and applied a exponential transformation
             - softplus: the std will be computed as log(1+exp(x))
+        :param grad_step_size: the step size taken in the learner's gradient update
         :return:
         """
         Serializable.quick_init(self, locals())
@@ -147,6 +147,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         self.hidden_nonlinearity = hidden_nonlinearity
         self.output_nonlinearity = output_nonlinearity
         self.input_shape = (None, obs_dim,)
+        self.step_size = grad_step_size
 
         # create network
         if mean_network is None:
@@ -233,10 +234,6 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
     def vectorized(self):
         return True
 
-    #def set_init_surr_obj(self, input_list, surr_obj_tensor):
-    #    self.input_list_for_grad = input_list
-    #    self.surr_obj = surr_obj_tensor
-
     def set_init_surr_obj(self, input_list, surr_objs_tensor):
         self.input_list_for_grad = input_list
         self.surr_objs = surr_objs_tensor
@@ -263,7 +260,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         all_fast_params_tensor = []
         for i in range(num_tasks):
             gradients = dict(zip(param_keys, tf.gradients(self.surr_objs[i], self.all_params.values())))
-            fast_params_tensor = dict(zip(param_keys, [self.all_params[key] - STEP_SIZE*gradients[key] for key in param_keys]))
+            fast_params_tensor = dict(zip(param_keys, [self.all_params[key] - self.step_size*gradients[key] for key in param_keys]))
             all_fast_params_tensor.append(fast_params_tensor)
         fast_params_per_task = sess.run(all_fast_params_tensor, feed_dict=dict(list(zip(self.input_list_for_grad, inputs))))
 
@@ -309,7 +306,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
 
         param_keys = init_params.keys()
         gradients = dict(zip(param_keys, tf.gradients(init_surr_obj, init_params.values())))
-        fast_params_tensor = dict(zip(param_keys, [init_params[key] - STEP_SIZE*gradients[key] for key in param_keys]))
+        fast_params_tensor = dict(zip(param_keys, [init_params[key] - self.step_size*gradients[key] for key in param_keys]))
 
         return self.dist_info_sym(new_obs_var, all_params=fast_params_tensor, is_training=is_training)
 
