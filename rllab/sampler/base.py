@@ -45,9 +45,11 @@ class BaseSampler(Sampler):
         """
         self.algo = algo
 
-    def process_samples(self, itr, paths, log=True):
+    def process_samples(self, itr, paths, prefix='', log=True):
         baselines = []
         returns = []
+
+        # TODO - is this doing some constant baseline automatically?
 
         if hasattr(self.algo.baseline, "predict_n"):
             all_path_baselines = self.algo.baseline.predict_n(paths)
@@ -173,12 +175,12 @@ class BaseSampler(Sampler):
             #logger.record_tabular('Iteration', itr)
             #logger.record_tabular('AverageDiscountedReturn',
             #                      average_discounted_return)
-            logger.record_tabular('AverageReturn', np.mean(undiscounted_returns))
+            logger.record_tabular(prefix+'AverageReturn', np.mean(undiscounted_returns))
             #logger.record_tabular('ExplainedVariance', ev)
             #logger.record_tabular('NumTrajs', len(paths))
             #logger.record_tabular('Entropy', ent)
             #logger.record_tabular('Perplexity', np.exp(ent))
-            logger.record_tabular('StdReturn', np.std(undiscounted_returns))
+            logger.record_tabular(prefix+'StdReturn', np.std(undiscounted_returns))
             #logger.record_tabular('MaxReturn', np.max(undiscounted_returns))
             #logger.record_tabular('MinReturn', np.min(undiscounted_returns))
 
