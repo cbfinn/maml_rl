@@ -91,7 +91,7 @@ class GymEnv(Env, Serializable):
     def horizon(self):
         return self._horizon
 
-    def reset(self):
+    def reset(self, **kwargs):
         if self._force_reset and self.monitoring:
             recorder = self.env._monitor.stats_recorder
             if recorder is not None:

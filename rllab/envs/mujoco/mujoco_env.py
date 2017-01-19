@@ -123,7 +123,7 @@ class MujocoEnv(Env):
                 start += datum_dim
 
     @overrides
-    def reset(self, init_state=None):
+    def reset(self, init_state=None, **kwargs):
         self.reset_mujoco(init_state)
         self.model.forward()
         self.current_com = self.model.data.com_subtree[0]
