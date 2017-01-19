@@ -124,6 +124,21 @@ class BatchPolopt(RLAlgorithm):
                     logger.log("Saved")
                     logger.record_tabular('Time', time.time() - start_time)
                     logger.record_tabular('ItrTime', time.time() - itr_start_time)
+
+                    # debugging
+                    if itr % 2 == 0:
+                        logger.log("Saving visualization of paths")
+                        import matplotlib.pyplot as plt;
+                        for ind in range(5):
+                            plt.clf(); plt.hold(True)
+                            points = paths[ind]['observations']
+                            plt.plot(points[:,0], points[:,1], '-r', linewidth=2)
+                            plt.xlim([-1.0, 1.0])
+                            plt.ylim([-1.0, 1.0])
+                            plt.legend(['path'])
+                            plt.savefig('/home/cfinn/path'+str(ind)+'.png')
+                    # end debugging
+
                     logger.dump_tabular(with_prefix=False)
                     if self.plot:
                         self.update_plot()

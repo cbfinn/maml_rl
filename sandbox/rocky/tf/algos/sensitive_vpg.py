@@ -22,6 +22,7 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
             baseline,
             optimizer=None,
             optimizer_args=None,
+            use_sensitive=True,
             **kwargs):
         Serializable.quick_init(self, locals())
         if optimizer is None:
@@ -36,13 +37,13 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
             optimizer = FirstOrderOptimizer(**optimizer_args)
         self.optimizer = optimizer
         self.opt_info = None
+        self.use_sensitive = use_sensitive
         super(SensitiveVPG, self).__init__(env=env, policy=policy, baseline=baseline, **kwargs)
 
     @overrides
     def init_opt(self):
         # TODO Commented out all KL stuff for now, since it is only used for logging
         is_recurrent = int(self.policy.recurrent)
-        num_tasks = 10 # TODO - don't hardcode
         dist = self.policy.distribution
 
         #old_dist_info_vars = {
@@ -67,7 +68,7 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
 
         init_obs_vars, init_action_vars, init_adv_vars = [], [], []
         init_surr_objs = []
-        for i in range(num_tasks):
+        for i in range(self.meta_batch_size):
             init_obs_vars.append(self.env.observation_space.new_tensor_variable(
                 'init_obs' + str(i),
                 extra_dims=1 + is_recurrent,
@@ -108,7 +109,7 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
 
         obs_vars, action_vars, adv_vars = [], [], []
         surr_objs = []
-        for i in range(num_tasks):
+        for i in range(self.meta_batch_size):
             obs_vars.append(self.env.observation_space.new_tensor_variable(
                 'obs' + str(i),
                 extra_dims=1 + is_recurrent,
@@ -127,10 +128,14 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
             surr_objs.append(- tf.reduce_mean(logli * adv_vars[i]))
 
 
+        # TODO - add option/flag for baseline.
         surr_obj = tf.reduce_mean(tf.pack(surr_objs, 0))
-
         new_input_list = input_list + obs_vars + action_vars + adv_vars
-        self.optimizer.update_opt(loss=surr_obj, target=self.policy, inputs=new_input_list)
+
+        if self.use_sensitive:
+            self.optimizer.update_opt(loss=surr_obj, target=self.policy, inputs=new_input_list)
+        else:  # baseline method of just training initial policy
+            self.optimizer.update_opt(loss=tf.reduce_mean(tf.pack(init_surr_objs,0)), target=self.policy, inputs=input_list)
 
         #f_kl = tensor_utils.compile_function(
         #    inputs=input_list + old_dist_info_vars_list,
@@ -143,12 +148,10 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
 
     @overrides
     def optimize_policy(self, itr, init_samples_data, updated_samples_data):
-        # TODO - this function should update self.policy._pre_update_dist (the learner's parameters)
         logger.log("optimizing policy")
-        num_tasks = len(init_samples_data)
 
         init_obs_list, init_action_list, init_adv_list = [], [], []
-        for i in range(num_tasks):
+        for i in range(self.meta_batch_size):
             inputs = ext.extract(
                 init_samples_data[i],
                 "observations", "actions", "advantages"
@@ -158,7 +161,7 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
             init_adv_list.append(inputs[2])
 
         obs_list, action_list, adv_list = [], [], []
-        for i in range(num_tasks):
+        for i in range(self.meta_batch_size):
             inputs = ext.extract(
                 updated_samples_data[i],
                 "observations", "actions", "advantages"
@@ -167,7 +170,12 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
             action_list.append(inputs[1])
             adv_list.append(inputs[2])
 
-        inputs = init_obs_list + init_action_list + init_adv_list + obs_list + action_list + adv_list
+        init_inputs = init_obs_list + init_action_list + init_adv_list
+        inputs = init_inputs + obs_list + action_list + adv_list
+
+        if not self.use_sensitive:
+            # baseline of only training initial policy
+            inputs = init_inputs
 
         #agent_infos = init_samples_data["agent_infos"]
         #state_info_list = [agent_infos[k] for k in self.policy.state_info_keys]
