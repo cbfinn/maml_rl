@@ -24,8 +24,11 @@ class BatchSensitivePolopt(RLAlgorithm):
             scope=None,
             n_itr=500,
             start_itr=0,
-            batch_size=5000,  # meta_batch_size of 10 (because max path length is 500)
+            # Note that the number of trajectories for grad upate = batch_size / (max_path_length*meta_batch_size)
+            # Defaults are 10 trajectories of length 500 for gradient update
+            batch_size=50000,  # number of transitions used per batch
             max_path_length=500,
+            meta_batch_size = 10,
             discount=0.99,
             gae_lambda=1,
             plot=False,
@@ -78,8 +81,8 @@ class BatchSensitivePolopt(RLAlgorithm):
         self.store_paths = store_paths
         self.whole_paths = whole_paths
         self.fixed_horizon = fixed_horizon
+        self.meta_batch_size = meta_batch_size # number of tasks
 
-        self.meta_batch_size = batch_size / max_path_length
         if sampler_cls is None:
             if self.policy.vectorized and not force_batch_sampler:
                 sampler_cls = VectorizedSampler
@@ -106,8 +109,8 @@ class BatchSensitivePolopt(RLAlgorithm):
         assert type(paths) == dict
         return paths
 
-    def process_samples(self, itr, paths, log=True):
-        return self.sampler.process_samples(itr, paths, log=log)
+    def process_samples(self, itr, paths, prefix='', log=True):
+        return self.sampler.process_samples(itr, paths, prefix=prefix, log=log)
 
     def train(self):
         # TODO - make this a util
@@ -121,33 +124,34 @@ class BatchSensitivePolopt(RLAlgorithm):
                 itr_start_time = time.time()
                 with logger.prefix('itr #%d | ' % itr):
                     # TODO - this is specific to the pointmass task / goal task.
-                    learner_env_goals = np.random.uniform(-1, 1, size=(self.meta_batch_size, 2, ))
+                    learner_env_goals = np.random.uniform(0, 1, size=(self.meta_batch_size, 2, ))
+                    learner_env_goals[:, 1] = 0
 
                     logger.log("Obtaining samples using the pre-update policy...")
                     self.policy.switch_to_init_dist()  # Switch to pre-update policy
-                    paths = self.obtain_samples(itr, reset_args=learner_env_goals)
+                    preupdate_paths = self.obtain_samples(itr, reset_args=learner_env_goals)
                     logger.log("Processing samples...")
                     init_samples_data = {}
-                    for key in paths.keys():
-                        init_samples_data[key] = self.process_samples(itr, paths[key], log=False)
+                    for key in preupdate_paths.keys():
+                        init_samples_data[key] = self.process_samples(itr, preupdate_paths[key], log=False)
                     # for logging purposes only
-                    self.process_samples(itr, flatten_list(paths.values()), log=True)
+                    self.process_samples(itr, flatten_list(preupdate_paths.values()), prefix='Pre', log=True)
                     logger.log("Logging pre-update diagnostics...")
-                    self.log_diagnostics(flatten_list(paths.values()))
+                    self.log_diagnostics(flatten_list(preupdate_paths.values()))
 
                     logger.log("Computing policy updates...")
                     self.policy.compute_updated_dists(init_samples_data)
 
                     logger.log("Obtaining samples using the post-update policies...")
-                    paths = self.obtain_samples(itr, reset_args=learner_env_goals)
+                    postupdate_paths = self.obtain_samples(itr, reset_args=learner_env_goals)
                     logger.log("Processing samples...")
                     updated_samples_data = {}
-                    for key in paths.keys():
-                        updated_samples_data[key] = self.process_samples(itr, paths[key], log=False)
+                    for key in postupdate_paths.keys():
+                        updated_samples_data[key] = self.process_samples(itr, postupdate_paths[key], log=False)
                     # for logging purposes only
-                    self.process_samples(itr, flatten_list(paths.values()), log=True)
+                    self.process_samples(itr, flatten_list(postupdate_paths.values()), prefix='Post', log=True)
                     logger.log("Logging post-update diagnostics...")
-                    self.log_diagnostics(flatten_list(paths.values()))
+                    self.log_diagnostics(flatten_list(postupdate_paths.values()))
 
                     logger.log("Optimizing policy...")
                     # This needs to take both init_samples_data and samples_data
@@ -160,6 +164,23 @@ class BatchSensitivePolopt(RLAlgorithm):
                     logger.log("Saved")
                     logger.record_tabular('Time', time.time() - start_time)
                     logger.record_tabular('ItrTime', time.time() - itr_start_time)
+                    if itr % 2 == 0:
+                        logger.log("Saving visualization of paths")
+                        import matplotlib.pyplot as plt;
+                        for ind in range(5):
+                            plt.clf()
+                            plt.plot(learner_env_goals[ind][0], learner_env_goals[ind][1], 'k*', markersize=10)
+                            plt.hold(True)
+                            pre_points = preupdate_paths[ind][0]['observations']
+                            post_points = postupdate_paths[ind][0]['observations']
+
+                            plt.plot(pre_points[:,0], pre_points[:,1], '-r', linewidth=2)
+                            plt.plot(post_points[:,0], post_points[:,1], '-.b', linewidth=2)
+                            plt.plot(0,0, 'k.', markersize=5)
+                            plt.xlim([-1.0, 1.0])
+                            plt.ylim([-1.0, 1.0])
+                            plt.legend(['goal', 'preupdate path', 'postupdate path'])
+                            plt.savefig('/home/cfinn/prepost_path'+str(ind)+'.png')
                     logger.dump_tabular(with_prefix=False)
                     if self.plot:
                         self.update_plot()
