@@ -12,9 +12,11 @@ from sandbox.rocky.tf.envs.base import TfEnv
 
 import tensorflow as tf
 
-learning_rates = [1e-4, 1e-3, 1e-2]
-fast_learning_rates = [0.2, 1.0, 5.0]
+learning_rates = [1e-2]
+fast_learning_rates = [0.1]
 baselines = ['zero'] # does the same as linear
+fast_batch_size = 10
+meta_batch_size = 100
 
 for fast_learning_rate in fast_learning_rates:
     for learning_rate in learning_rates:
@@ -37,9 +39,9 @@ for fast_learning_rate in fast_learning_rates:
                 env=env,
                 policy=policy,
                 baseline=baseline,
-                batch_size=5000, # use 100 trajs for grad update
+                batch_size=fast_batch_size, # number of trajs for grad update
                 max_path_length=5,
-                meta_batch_size=10,
+                meta_batch_size=meta_batch_size,
                 n_itr=200,
                 use_sensitive=True,
                 optimizer_args={'tf_optimizer_args':{'learning_rate': learning_rate}}
@@ -52,7 +54,8 @@ for fast_learning_rate in fast_learning_rates:
                 seed=1,
                 #exp_prefix='deleteme',
                 #exp_name='deleteme'
-                exp_prefix='sensitive1dT5_2017_01_19',
-                exp_name='sensitive_flr_' + str(fast_learning_rate) + '_lr_' + str(learning_rate) + 'baseline_' + bas,
+                #exp_prefix='sensitive1dT5_2017_01_19',
+                exp_prefix='bugfix_sensitive1dT5_2017_01_19',
+                exp_name='sensitive_mbs'+str(meta_batch_size)+'_flr_' + str(fast_learning_rate) + '_lr_' + str(learning_rate) + 'baseline_' + bas,
                 #plot=True,
             )
