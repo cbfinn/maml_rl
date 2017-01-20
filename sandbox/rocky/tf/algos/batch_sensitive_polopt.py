@@ -137,7 +137,7 @@ class BatchSensitivePolopt(RLAlgorithm):
                     # for logging purposes only
                     self.process_samples(itr, flatten_list(preupdate_paths.values()), prefix='Pre', log=True)
                     logger.log("Logging pre-update diagnostics...")
-                    self.log_diagnostics(flatten_list(preupdate_paths.values()))
+                    self.log_diagnostics(flatten_list(preupdate_paths.values()), prefix='Pre')
 
                     logger.log("Computing policy updates...")
                     self.policy.compute_updated_dists(init_samples_data)
@@ -151,7 +151,7 @@ class BatchSensitivePolopt(RLAlgorithm):
                     # for logging purposes only
                     self.process_samples(itr, flatten_list(postupdate_paths.values()), prefix='Post', log=True)
                     logger.log("Logging post-update diagnostics...")
-                    self.log_diagnostics(flatten_list(postupdate_paths.values()))
+                    self.log_diagnostics(flatten_list(postupdate_paths.values()), prefix='Post')
 
                     logger.log("Optimizing policy...")
                     # This needs to take both init_samples_data and samples_data
@@ -189,9 +189,9 @@ class BatchSensitivePolopt(RLAlgorithm):
                                   "continue...")
         self.shutdown_worker()
 
-    def log_diagnostics(self, paths):
+    def log_diagnostics(self, paths, prefix):
         self.env.log_diagnostics(paths)
-        self.policy.log_diagnostics(paths)
+        self.policy.log_diagnostics(paths, prefix)
         self.baseline.log_diagnostics(paths)
 
     def init_opt(self):

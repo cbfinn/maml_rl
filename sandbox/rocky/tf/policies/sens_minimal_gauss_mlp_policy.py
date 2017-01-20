@@ -431,9 +431,9 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         param_values = tf.get_default_session().run(params)
         return flatten_tensors(param_values)
 
-    def log_diagnostics(self, paths):
+    def log_diagnostics(self, paths, prefix=''):
         log_stds = np.vstack([path["agent_infos"]["log_std"] for path in paths])
-        logger.record_tabular('AveragePolicyStd', np.mean(np.exp(log_stds)))
+        logger.record_tabular(prefix+'AveragePolicyStd', np.mean(np.exp(log_stds)))
 
     #### CODE NOT USED AFTER HERE ####
     def get_reparam_action_sym(self, obs_var, action_var, old_dist_info_vars):
