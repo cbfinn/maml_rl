@@ -72,7 +72,7 @@ class BatchSensitivePolopt(RLAlgorithm):
         self.start_itr = start_itr
         # self.batch_size is the number of total transitions to collect.
         # batch_size is the number of trajectories for one fast grad update.
-        self.batch_size = batch_size * max_path_length * self.meta_batch_size
+        self.batch_size = batch_size * max_path_length * meta_batch_size
         self.max_path_length = max_path_length
         self.discount = discount
         self.gae_lambda = gae_lambda
@@ -190,11 +190,11 @@ class BatchSensitivePolopt(RLAlgorithm):
                             plt.legend(['goal', 'preupdate path', 'postupdate path'])
                             plt.savefig('/home/cfinn/prepost_path'+str(ind)+'.png')
                     logger.dump_tabular(with_prefix=False)
-                    if self.plot:
-                        self.update_plot()
-                        if self.pause_for_plot:
-                            input("Plotting evaluation run: Press Enter to "
-                                  "continue...")
+                    #if self.plot:
+                    #    self.update_plot()
+                    #    if self.pause_for_plot:
+                    #        input("Plotting evaluation run: Press Enter to "
+                    #              "continue...")
         self.shutdown_worker()
 
     def log_diagnostics(self, paths, prefix):
