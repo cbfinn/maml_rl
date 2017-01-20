@@ -44,8 +44,8 @@ for fast_learning_rate in fast_learning_rates:
                 meta_batch_size=meta_batch_size,
                 n_itr=200,
                 use_sensitive=True,
-                optimizer_args={'tf_optimizer_args':{'learning_rate': learning_rate}}
-                #plot=True,
+                optimizer_args={'tf_optimizer_args':{'learning_rate': learning_rate}},
+                plot=True,
             )
             run_experiment_lite(
                 algo.train(),
@@ -57,5 +57,5 @@ for fast_learning_rate in fast_learning_rates:
                 #exp_prefix='sensitive1dT5_2017_01_19',
                 exp_prefix='bugfix_sensitive0dT5_2017_01_19',
                 exp_name='sensitive_mbs'+str(meta_batch_size)+'_flr_' + str(fast_learning_rate) + '_lr_' + str(learning_rate) + 'baseline_' + bas,
-                #plot=True,
+                plot=True,
             )
