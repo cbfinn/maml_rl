@@ -15,7 +15,7 @@ import tensorflow as tf
 learning_rates = [1e-3]
 fast_learning_rates = [1.0]
 baselines = ['zero'] # does the same as linear
-fast_batch_size = 100
+fast_batch_size = 10
 meta_batch_size = 10
 
 for fast_learning_rate in fast_learning_rates:
@@ -56,6 +56,6 @@ for fast_learning_rate in fast_learning_rates:
                 #exp_name='deleteme'
                 #exp_prefix='sensitive1dT5_2017_01_19',
                 exp_prefix='bugfix_sensitive0dT5_2017_01_19',
-                exp_name='sensitive_mbs'+str(meta_batch_size)+'_flr_' + str(fast_learning_rate) + '_lr_' + str(learning_rate) + 'baseline_' + bas,
+                exp_name='sensitive_fbs'+str(fast_batch_size)+'_mbs'+str(meta_batch_size)+'_flr_' + str(fast_learning_rate) + '_lr_' + str(learning_rate) + 'baseline_' + bas,
                 #plot=True,
             )
