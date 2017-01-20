@@ -127,13 +127,14 @@ class BatchSensitivePolopt(RLAlgorithm):
                 with logger.prefix('itr #%d | ' % itr):
                     # TODO - this is specific to the pointmass task / goal task.
                     # TODO TODO for debugging - 2 options.
-                    #learner_env_goals = np.zeros((self.meta_batch_size, 2, ))
-                    #goals = [np.array([-0.5,0]), np.array([0.5,0])]
-                    #for i in range(self.meta_batch_size):
-                    #    learner_env_goals[i,:] = goals[np.random.randint(2)]
+                    # 0d
+                    learner_env_goals = np.zeros((self.meta_batch_size, 2, ))
+                    goals = [np.array([-0.5,0]), np.array([0.5,0])]
+                    for i in range(self.meta_batch_size):
+                        learner_env_goals[i,:] = goals[np.random.randint(2)]
                     # 1d
-                    learner_env_goals = np.random.uniform(0, 1, size=(self.meta_batch_size, 2, ))
-                    learner_env_goals[:, 1] = 0
+                    #learner_env_goals = np.random.uniform(0, 1, size=(self.meta_batch_size, 2, ))
+                    #learner_env_goals[:, 1] = 0
 
                     logger.log("Obtaining samples using the pre-update policy...")
                     self.policy.switch_to_init_dist()  # Switch to pre-update policy
