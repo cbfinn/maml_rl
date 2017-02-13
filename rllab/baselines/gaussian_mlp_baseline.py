@@ -29,10 +29,10 @@ class GaussianMLPBaseline(Baseline, Parameterized, Serializable):
         )
 
     @overrides
-    def fit(self, paths):
+    def fit(self, paths, log=True):
         observations = np.concatenate([p["observations"] for p in paths])
         returns = np.concatenate([p["returns"] for p in paths])
-        self._regressor.fit(observations, returns.reshape((-1, 1)))
+        self._regressor.fit(observations, returns.reshape((-1, 1)), log=log)
 
     @overrides
     def predict(self, path):

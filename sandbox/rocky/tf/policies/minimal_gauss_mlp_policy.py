@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 import numpy as np
 
 #from sandbox.rocky.tf.core.parameterized import Parameterized
@@ -16,13 +17,10 @@ from sandbox.rocky.tf.misc import tensor_utils
 import itertools
 
 import tensorflow as tf
-from tensorflow.contrib.layers.python import layers as tf_layers
+#from tensorflow.contrib.layers.python import layers as tf_layers
+tf_layers = None
 
-# TODO - what does this mean?
 load_params = True
-
-
-
 
 ### Start Helper functions ###
 def make_input(shape, input_var=None, name="input", **kwargs):
@@ -95,6 +93,14 @@ def forward_param_layer(input, param):
     tiled = tf.tile(reshaped_param, tile_arg)
     return tiled
 ### End Helper functions ###
+
+@contextmanager
+def suppress_params_loading():
+    global load_params
+    load_params = False
+    yield
+    load_params = True
+
 
 
 class GaussianMLPPolicy(StochasticPolicy, Serializable):
@@ -185,13 +191,13 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
                     init_std_param = np.log(np.exp(init_std) - 1)
                 else:
                     raise NotImplementedError
-                std_params = make_param_layer(
+                self.std_params = make_param_layer(
                     num_units=action_dim,
                     param=tf.constant_initializer(init_std_param),
                     name="output_std_param",
                     trainable=learn_std,
                 )
-                self._forward_std = lambda x: forward_param_layer(x, std_params)
+                self._forward_std = lambda x: forward_param_layer(x, self.std_params)
 
             self.std_parametrization = std_parametrization
 
@@ -263,12 +269,16 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
 
     def get_params_internal(self, **tags):
         if tags.get('trainable', False):
-            return tf.trainable_variables()
+            params = tf.trainable_variables()
         else:
-            return tf.all_variables()
+            params = tf.all_variables()
 
-        if regularizable in tags.keys():
-            import pdb; pdb.set_trace()
+        # TODO - this is hacky...
+        params = [p for p in params if p.name.startswith('mean_network') or p.name.startswith('output_std_param')]
+        params = [p for p in params if 'Adam' not in p.name]
+        return params
+        #if regularizable in tags.keys():
+        #    import pdb; pdb.set_trace()
 
     # This makes all of the parameters.
     def create_MLP(self, name, output_dim, hidden_sizes,
@@ -358,6 +368,7 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
         :return:
         """
         # Not used
+        print '--this really shouldnt be used--'
         import pdb; pdb.set_trace()
         new_dist_info_vars = self.dist_info_sym(obs_var, action_var)
         new_mean_var, new_log_std_var = new_dist_info_vars["mean"], new_dist_info_vars["log_std"]
@@ -368,7 +379,6 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
 
     def get_param_dtypes(self, **tags):
         # Not used.
-        import pdb; pdb.set_trace()
         tag_tuple = tuple(sorted(list(tags.items()), key=lambda x: x[0]))
         if tag_tuple not in self._cached_param_dtypes:
             params = self.get_params(**tags)
@@ -378,7 +388,6 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
 
     def get_param_shapes(self, **tags):
         # Not used.
-        import pdb; pdb.set_trace()
         tag_tuple = tuple(sorted(list(tags.items()), key=lambda x: x[0]))
         if tag_tuple not in self._cached_param_shapes:
             params = self.get_params(**tags)
@@ -388,7 +397,6 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
 
     def set_param_values(self, flattened_params, **tags):
         # Not used.
-        import pdb; pdb.set_trace()
         debug = tags.pop("debug", False)
         param_values = unflatten_tensors(
             flattened_params, self.get_param_shapes(**tags))
@@ -411,7 +419,6 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
 
     def flat_to_params(self, flattened_params, **tags):
         # Not used.
-        import pdb; pdb.set_trace()
         return unflatten_tensors(flattened_params, self.get_param_shapes(**tags))
 
     def __getstate__(self):

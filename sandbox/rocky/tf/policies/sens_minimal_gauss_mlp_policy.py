@@ -23,8 +23,6 @@ from tensorflow.contrib.layers.python import layers as tf_layers
 load_params = True
 
 
-
-
 ### Start Helper functions ###
 def make_input(shape, input_var=None, name="input", **kwargs):
     if input_var is None:
@@ -135,28 +133,31 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         :param std_parametrization: how the std should be parametrized. There are a few options:
             - exp: the logarithm of the std will be stored, and applied a exponential transformation
             - softplus: the std will be computed as log(1+exp(x))
-        :param grad_step_size: the step size taken in the learner's gradient update
+        :param grad_step_size: the step size taken in the learner's gradient update, sample uniformly if it is a range e.g. [0.1,1]
         :return:
         """
         Serializable.quick_init(self, locals())
         assert isinstance(env_spec.action_space, Box)
 
         obs_dim = env_spec.observation_space.flat_dim
-        action_dim = env_spec.action_space.flat_dim
+        self.action_dim = env_spec.action_space.flat_dim
         self.n_hidden = len(hidden_sizes)
         self.hidden_nonlinearity = hidden_nonlinearity
         self.output_nonlinearity = output_nonlinearity
         self.input_shape = (None, obs_dim,)
         self.step_size = grad_step_size
+        if type(self.step_size) == list:
+            self.step_size_vals = None
+            self.step_size_vars = {}
 
         # create network
         if mean_network is None:
-            self.all_params = self.create_MLP(
+            self.init_params = self.create_MLP(
                 name="mean_network",
-                output_dim=action_dim,
+                output_dim=self.action_dim,
                 hidden_sizes=hidden_sizes,
             )
-            self.input_tensor, _ = self.forward_MLP('mean_network', self.all_params,
+            self.input_tensor, _ = self.forward_MLP('mean_network', self.init_params,
                 reuse=None # Need to run this for batch norm
             )
             forward_mean = lambda x, params, is_train: self.forward_MLP('mean_network', params,
@@ -174,7 +175,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
                 #self.std_params = std_params = self.create_MLP(
                     #name="std_network",
                     #input_shape=(None, obs_dim,),
-                    #output_dim=action_dim,
+                    #output_dim=self.action_dim,
                     #hidden_sizes=std_hidden_sizes,
                 #)
                 #forward_std = lambda x: self.forward_MLP('std_network', std_params,
@@ -188,13 +189,14 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
                     init_std_param = np.log(np.exp(init_std) - 1)
                 else:
                     raise NotImplementedError
-                self.all_params['std_param'] = make_param_layer(
-                    num_units=action_dim,
+                self.init_params['std_param'] = make_param_layer(
+                    num_units=self.action_dim,
                     param=tf.constant_initializer(init_std_param),
                     name="output_std_param",
                     trainable=learn_std,
                 )
                 forward_std = lambda x, params: forward_param_layer(x, params['std_param'])
+            self.all_params = self.init_params
 
             # unify forward mean and forward std into a single function
             self._forward = lambda obs, params, is_train: (
@@ -211,7 +213,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
 
             self.min_std_param = min_std_param
 
-            self._dist = DiagonalGaussian(action_dim)
+            self._dist = DiagonalGaussian(self.action_dim)
 
             self._cached_params = {}
 
@@ -244,7 +246,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         """
         self._updated_f_dists = {}
         num_tasks = len(samples)
-        param_keys = self.all_params.keys()
+        param_keys = self.init_params.keys()
         sess = tf.get_default_session()
 
         obs_list, action_list, adv_list = [], [], []
@@ -257,16 +259,45 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
 
         inputs = obs_list + action_list + adv_list
 
-        all_fast_params_tensor = []
+        if type(self.step_size) == list and self.step_size_vals is None:
+            self.step_size_vals = np.random.uniform(self.step_size[0], self.step_size[1], [num_tasks])
+            self.assign_step_size()
+
+        # To do a second update, replace self.all_params below with the params that were used to collect the policy.
+        init_param_values = None
+        if type(self.all_params) == list:
+            init_param_values = self.get_variable_values(self.init_params)
+
+        step_size = self.step_size
         for i in range(num_tasks):
-            gradients = dict(zip(param_keys, tf.gradients(self.surr_objs[i], self.all_params.values())))
-            fast_params_tensor = dict(zip(param_keys, [self.all_params[key] - self.step_size*gradients[key] for key in param_keys]))
-            all_fast_params_tensor.append(fast_params_tensor)
-        fast_params_per_task = sess.run(all_fast_params_tensor, feed_dict=dict(list(zip(self.input_list_for_grad, inputs))))
+            if type(self.all_params) == list: # TODO - clean this, self.all_params are values not tensors
+                self.assign_params(self.init_params, self.all_params[i])
+            if type(self.step_size) == list:
+                step_size = self.step_size_vars[i]
+
+        if 'all_fast_params_tensor' not in dir(self):
+            self.all_fast_params_tensor = []
+            for i in range(num_tasks):
+                # TODO - don't construct this computation graph more than once.
+                gradients = dict(zip(param_keys, tf.gradients(self.surr_objs[i], self.init_params.values())))
+                fast_params_tensor = dict(zip(param_keys, [self.init_params[key] - step_size*gradients[key] for key in param_keys]))
+                self.all_fast_params_tensor.append(fast_params_tensor)
+        # pull params out of tensorflow.
+        self.all_params = sess.run(self.all_fast_params_tensor, feed_dict=dict(list(zip(self.input_list_for_grad, inputs))))
+
+        if init_param_values is not None:
+            self.assign_params(self.init_params, init_param_values)
+
+        # TODO TODO - trying out no std param update
+        #for key in self.all_params.keys():
+        #    if 'std' in key:
+        #        for i in range(num_tasks):
+        #            fast_params_per_task[i][key] = self.all_params[key]
 
         for i in range(num_tasks):
 
-            info = self.dist_info_sym(self.input_tensor, dict(), all_params=fast_params_per_task[i],
+            # TODO - use a placeholder to feed in the params, so that we don't have to recompile every time.
+            info = self.dist_info_sym(self.input_tensor, dict(), all_params=self.all_params[i],
                     is_training=False)
 
             # before sensitive update
@@ -277,8 +308,40 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
 
         self._cur_f_dist = self._updated_f_dists
 
+    def get_variable_values(self, tensor_dict):
+        sess = tf.get_default_session()
+        result = sess.run(tensor_dict)
+        return result
+
+    def assign_params(self, tensor_dict, param_values):
+        if 'assign_placeholders' not in dir(self):
+            # make computation graph, if it doesn't exist.
+            self.assign_placeholders = {}
+            self.assign_ops = {}
+            for key in tensor_dict.keys():
+                self.assign_placeholders[key] = tf.placeholder(tf.float32)
+                self.assign_ops[key] = tf.assign(tensor_dict[key], self.assign_placeholders[key])
+
+        feed_dict = {self.assign_placeholders[key]:param_values[key] for key in tensor_dict.keys()}
+        sess = tf.get_default_session()
+        sess.run(self.assign_ops, feed_dict)
+
+    def assign_step_size(self):
+        if 'assign_step_size_ops' not in dir(self):
+            self.assign_ss_placeholders = {}
+            self.assign_step_size_ops = {}
+            for key in self.step_size_vars.keys():
+                self.assign_ss_placeholders[key] = tf.placeholder(tf.float32)
+                self.assign_step_size_ops[key] = tf.assign(self.step_size_vars[key], self.assign_ss_placeholders[key])
+        feed_dict = {self.assign_ss_placeholders[key]:self.step_size_vals[key] for key in self.step_size_vars.keys()}
+        sess = tf.get_default_session()
+        sess.run(self.assign_step_size_ops, feed_dict)
+
     def switch_to_init_dist(self):
         self._cur_f_dist = self._init_f_dist
+        self.all_params = self.init_params
+        if type(self.step_size) == list:
+            self.step_size_vals = None
 
     def dist_info_sym(self, obs_var, state_info_vars=None, all_params=None, is_training=True):
         # This function constructs the tf graph, only called during beginning of training
@@ -287,7 +350,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         # std_param_var - tensor for policy std before output
         #mean_var, std_param_var = L.get_output([self._l_mean, self._l_std_param], obs_var)
         if all_params is None:
-            all_params = self.all_params
+            all_params = self.init_params
 
         mean_var, std_param_var = self._forward(obs_var, all_params, is_training)
         if self.min_std_param is not None:
@@ -300,13 +363,23 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
             raise NotImplementedError
         return dict(mean=mean_var, log_std=log_std_var)
 
-    def updated_dist_info_sym(self, init_obs_var, init_surr_obj, new_obs_var, is_training=True):
+    def updated_dist_info_sym(self, task_id, init_obs_var, init_surr_obj, new_obs_var, is_training=True):
         # symbolically create sensitive learning graph, for the meta-optimization
-        init_params = self.all_params
+        init_params = self.init_params
+
+        step_size = self.step_size
+        if type(self.step_size) == list:
+            self.step_size_vars[task_id] = tf.Variable(trainable=False, initial_value=np.zeros(()),dtype=tf.float32)
+            step_size = self.step_size_vars[task_id]
 
         param_keys = init_params.keys()
         gradients = dict(zip(param_keys, tf.gradients(init_surr_obj, init_params.values())))
-        fast_params_tensor = dict(zip(param_keys, [init_params[key] - self.step_size*gradients[key] for key in param_keys]))
+        fast_params_tensor = dict(zip(param_keys, [init_params[key] - step_size*gradients[key] for key in param_keys]))
+
+        # TODO TODO - trying out no std param update
+        #for key in self.all_params.keys():
+        #    if 'std' in key:
+        #        fast_params_tensor[key] = self.all_params[key]
 
         return self.dist_info_sym(new_obs_var, all_params=fast_params_tensor, is_training=is_training)
 
@@ -337,8 +410,8 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
             num_tasks = len(self._cur_f_dist)
             assert flat_obs.shape[0] == num_tasks
 
-            means = np.zeros((num_tasks, 2)) # a hack - don't hard code 2
-            log_stds = np.zeros((num_tasks, 2))
+            means = np.zeros((num_tasks, self.action_dim))
+            log_stds = np.zeros((num_tasks, self.action_dim))
             for i in range(num_tasks):
                 means[i:i+1], log_stds[i:i+1] = self._cur_f_dist[i](flat_obs[i:i+1,:])
         else:

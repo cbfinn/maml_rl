@@ -38,33 +38,16 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
         self.optimizer = optimizer
         self.opt_info = None
         self.use_sensitive = use_sensitive
-        super(SensitiveVPG, self).__init__(env=env, policy=policy, baseline=baseline, **kwargs)
+        super(SensitiveVPG, self).__init__(env=env, policy=policy, baseline=baseline, use_sensitive=use_sensitive, **kwargs)
 
     @overrides
     def init_opt(self):
         # TODO Commented out all KL stuff for now, since it is only used for logging
         is_recurrent = int(self.policy.recurrent)
+        assert not is_recurrent
         dist = self.policy.distribution
 
-        #old_dist_info_vars = {
-        #    k: tf.placeholder(tf.float32, shape=[None] * (1 + is_recurrent) + list(shape), name='old_%s' % k)
-        #    for k, shape in dist.dist_info_specs
-        #    }
-        #old_dist_info_vars_list = [old_dist_info_vars[k] for k in dist.dist_info_keys]
-
-        # TODO - worry about this later, not used in standard case.
-        #state_info_vars = {
-        #    k: tf.placeholder(tf.float32, shape=[None] * (1 + is_recurrent) + list(shape), name=k)
-        #    for k, shape in self.policy.state_info_specs
-        #    }
-        #state_info_vars_list = [state_info_vars[k] for k in self.policy.state_info_keys]
         state_info_vars, state_info_vars_list = {}, []
-
-        # TODO - commening out some recurrence stuff now for readability
-        #if is_recurrent:
-        #    valid_var = tf.placeholder(tf.float32, shape=[None, None], name="valid")
-        #else:
-        #    valid_var = None
 
         init_obs_vars, init_action_vars, init_adv_vars = [], [], []
         init_surr_objs = []
@@ -85,27 +68,14 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
 
             init_dist_info_vars = self.policy.dist_info_sym(init_obs_vars[i], state_info_vars)
             logli = dist.log_likelihood_sym(init_action_vars[i], init_dist_info_vars)
-            #kl = dist.kl_sym(old_dist_info_vars, init_dist_info_vars)
 
             # formulate as a minimization problem
             # The gradient of the surrogate objective is the policy gradient
-            if is_recurrent:
-                init_surr_objs.append(- tf.reduce_sum(logli * init_adv_vars[i] * valid_var) / tf.reduce_sum(valid_var))
-                #mean_kl = tf.reduce_sum(kl * valid_var) / tf.reduce_sum(valid_var)
-                #max_kl = tf.reduce_max(kl * valid_var)
-            else:
-                init_surr_objs.append(- tf.reduce_mean(logli * init_adv_vars[i]))
-                #mean_kl = tf.reduce_mean(kl)
-                #max_kl = tf.reduce_max(kl)
+            init_surr_objs.append(- tf.reduce_mean(logli * init_adv_vars[i]))
 
         # For computing the fast update for sampling
-        #input_list = [init_obs_vars[0], init_action_vars[0], init_adv_vars[0]] + state_info_vars_list
-        #self.policy.set_init_surr_obj(input_list, init_surr_objs[0])
         input_list = init_obs_vars + init_action_vars + init_adv_vars + state_info_vars_list
         self.policy.set_init_surr_obj(input_list, init_surr_objs)
-
-        #if is_recurrent:
-        #    input_list.append(valid_var)
 
         obs_vars, action_vars, adv_vars = [], [], []
         surr_objs = []
@@ -123,7 +93,7 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
                 ndim=1 + is_recurrent,
                 dtype=tf.float32,
             ))
-            dist_info_vars = self.policy.updated_dist_info_sym(init_obs_vars[i], init_surr_objs[i], obs_vars[i], state_info_vars)
+            dist_info_vars = self.policy.updated_dist_info_sym(i, init_obs_vars[i], init_surr_objs[i], obs_vars[i], state_info_vars)
             logli = dist.log_likelihood_sym(action_vars[i], dist_info_vars)
             surr_objs.append(- tf.reduce_mean(logli * adv_vars[i]))
 
@@ -177,12 +147,6 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
             # baseline of only training initial policy
             inputs = init_inputs
 
-        #agent_infos = init_samples_data["agent_infos"]
-        #state_info_list = [agent_infos[k] for k in self.policy.state_info_keys]
-        #inputs += tuple(state_info_list)
-        #if self.policy.recurrent:
-        #    inputs += (samples_data["valids"],)
-        #dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
         loss_before = self.optimizer.loss(inputs)
         self.optimizer.optimize(inputs)
         loss_after = self.optimizer.loss(inputs)

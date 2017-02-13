@@ -3,9 +3,8 @@ from sandbox.rocky.tf.algos.sensitive_vpg import SensitiveVPG
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.baselines.zero_baseline import ZeroBaseline
-from examples.point_env import PointEnv
-from examples.point_env_randgoal import PointEnvRandGoal
-from examples.point_env_randgoal_oracle import PointEnvRandGoalOracle
+from rllab.envs.mujoco.swimmer_env import SwimmerEnv
+from rllab.envs.mujoco.swimmer_randgoal_env import SwimmerRandGoalEnv
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import stub, run_experiment_lite
 #from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
@@ -14,26 +13,29 @@ from sandbox.rocky.tf.envs.base import TfEnv
 
 import tensorflow as tf
 
-learning_rates = [1e-3] # 1e-3 for sensitive, 1e-2 for oracle, non-sensitive
-fast_learning_rates = [0.5] #[[0.2,0.8]] #[0.5]
+#[[0.2,0.8]] #[0.5]  # tried 0.001 and it seemed to low, 0.1 did something reasonable (loss was impr..), # 0.5 does well sometimes, but also goes to nans
+
+# 1e-3 for sensitive, 1e-2 for oracle, non-sensitive
+learning_rates = [1e-3]
+fast_learning_rates = [1.0]  # 0.5 works for [0.1, 0.2]
 baselines = ['linear']
-fast_batch_size = 100
-meta_batch_size = 10
-max_path_length = 5
+fast_batch_size = 10  # 10 works for [0.1, 0.2], 20 doesn't improve much for [0,0.2]
+meta_batch_size = 20  # 10 also works, but much less stable
+max_path_length = 500
 
 for fast_learning_rate in fast_learning_rates:
     for learning_rate in learning_rates:
         for bas in baselines:
             stub(globals())
 
-            #env = TfEnv(normalize(PointEnv()))
-            env = TfEnv(normalize(PointEnvRandGoal()))
-            #env = TfEnv(normalize(PointEnvRandGoalOracle()))
+            #env = TfEnv(normalize(SwimmerEnv()))
+            env = TfEnv(normalize(SwimmerRandGoalEnv()))
             policy = SensitiveGaussianMLPPolicy(
                 name="policy",
                 env_spec=env.spec,
                 grad_step_size=fast_learning_rate,
                 hidden_nonlinearity=tf.nn.relu,
+                hidden_sizes=(100,100),
             )
             if bas == 'zero':
                 baseline = ZeroBaseline(env_spec=env.spec)
@@ -62,7 +64,7 @@ for fast_learning_rate in fast_learning_rates:
                 #exp_name='deleteme'
                 #exp_prefix='sensitive1dT5_2017_01_19',
                 #exp_prefix='bugfix_sensitive0d_8tasks_T'+str(max_path_length)+'_2017_02_05',
-                exp_prefix='bugfix_sensitive2d_T'+str(max_path_length)+'_2017_02_07',
-                exp_name='sensitive_fbs'+str(fast_batch_size)+'_mbs'+str(meta_batch_size)+'_flr_' + str(fast_learning_rate) + '_lr_' + str(learning_rate) + 'baseline_' + bas +'_length'+str(),
+                exp_prefix='sensitive_swimmer_2017_02_10_1dlarge',
+                exp_name='bignet_sensitive_fbs'+str(fast_batch_size)+'_mbs'+str(meta_batch_size)+'_flr_' + str(fast_learning_rate) + '_lr_' + str(learning_rate) + 'baseline_' + bas +'_length'+str(),
                 plot=False,
             )

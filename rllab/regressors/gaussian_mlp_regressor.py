@@ -191,7 +191,7 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
         self._y_mean_var = y_mean_var
         self._y_std_var = y_std_var
 
-    def fit(self, xs, ys):
+    def fit(self, xs, ys, log=True):
 
         if self._subsample_factor < 1:
             num_samples_tot = xs.shape[0]
@@ -231,11 +231,12 @@ class GaussianMLPRegressor(LasagnePowered, Serializable):
             if self._use_trust_region:
                 mean_kl += self._optimizer.constraint_val(inputs)
 
-        logger.record_tabular(prefix + 'LossBefore', loss_before / batch_count)
-        logger.record_tabular(prefix + 'LossAfter', loss_after / batch_count)
-        logger.record_tabular(prefix + 'dLoss', loss_before - loss_after / batch_count)
-        if self._use_trust_region:
-            logger.record_tabular(prefix + 'MeanKL', mean_kl / batch_count)
+        if log:
+            logger.record_tabular(prefix + 'LossBefore', loss_before / batch_count)
+            logger.record_tabular(prefix + 'LossAfter', loss_after / batch_count)
+            logger.record_tabular(prefix + 'dLoss', loss_before - loss_after / batch_count)
+            if self._use_trust_region:
+                logger.record_tabular(prefix + 'MeanKL', mean_kl / batch_count)
 
     def predict(self, xs):
         """

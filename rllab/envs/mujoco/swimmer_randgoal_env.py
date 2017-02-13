@@ -7,7 +7,7 @@ from rllab.misc import logger
 from rllab.misc import autoargs
 
 
-class SwimmerEnv(MujocoEnv, Serializable):
+class SwimmerRandGoalEnv(MujocoEnv, Serializable):
 
     FILE = 'swimmer.xml'
 
@@ -18,7 +18,8 @@ class SwimmerEnv(MujocoEnv, Serializable):
             ctrl_cost_coeff=1e-2,
             *args, **kwargs):
         self.ctrl_cost_coeff = ctrl_cost_coeff
-        super(SwimmerEnv, self).__init__(*args, **kwargs)
+        self._goal_vel = None
+        super(SwimmerRandGoalEnv, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
 
     def get_current_obs(self):
@@ -28,6 +29,17 @@ class SwimmerEnv(MujocoEnv, Serializable):
             self.get_body_com("torso").flat,
         ]).reshape(-1)
 
+    @overrides
+    def reset(self, init_state=None, reset_args=None, **kwargs):
+        goal_vel = reset_args
+        if goal_vel is not None:
+            self._goal_vel = goal_vel
+        self.reset_mujoco(init_state)
+        self.model.forward()
+        self.current_com = self.model.data.com_subtree[0]
+        self.dcom = np.zeros_like(self.current_com)
+        return self.get_current_obs()
+
     def step(self, action):
         self.forward_dynamics(action)
         next_obs = self.get_current_obs()
@@ -35,9 +47,7 @@ class SwimmerEnv(MujocoEnv, Serializable):
         scaling = (ub - lb) * 0.5
         ctrl_cost = 0.5 * self.ctrl_cost_coeff * np.sum(
             np.square(action / scaling))
-        forward_reward = self.get_body_comvel("torso")[0]
-        #forward_reward = -1.5*np.abs(self.get_body_comvel("torso")[0] - 0.15)
-        # max achievable vel is around 0.20 for vpg.
+        forward_reward = -1.5*np.abs(self.get_body_comvel("torso")[0] - self._goal_vel)
         reward = forward_reward - ctrl_cost
         done = False
         return Step(next_obs, reward, done)
@@ -48,17 +58,7 @@ class SwimmerEnv(MujocoEnv, Serializable):
             path["observations"][-1][-3] - path["observations"][0][-3]
             for path in paths
         ]
-        #if np.mean(progs) > 4.5:
-        #    import pdb; pdb.set_trace()
-        #path = paths[0]
-        #t = -10
-        #lb, ub = self.action_bounds
-        #scaling = (ub - lb) * 0.5
-        #rew = path['rewards'][t]
-        #act = path['actions'][t]
-        #ctrl_cost = 0.5*self.ctrl_cost_coeff*np.sum(np.square(act/scaling))
-
-        logger.record_tabular('AverageForwardProgress', np.mean(progs))
-        logger.record_tabular('MaxForwardProgress', np.max(progs))
-        logger.record_tabular('MinForwardProgress', np.min(progs))
-        logger.record_tabular('StdForwardProgress', np.std(progs))
+        logger.record_tabular(prefix+'AverageForwardProgress', np.mean(progs))
+        logger.record_tabular(prefix+'MaxForwardProgress', np.max(progs))
+        logger.record_tabular(prefix+'MinForwardProgress', np.min(progs))
+        logger.record_tabular(prefix+'StdForwardProgress', np.std(progs))

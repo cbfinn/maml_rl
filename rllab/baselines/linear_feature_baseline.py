@@ -23,7 +23,7 @@ class LinearFeatureBaseline(Baseline):
         return np.concatenate([o, o ** 2, al, al ** 2, al ** 3, np.ones((l, 1))], axis=1)
 
     @overrides
-    def fit(self, paths):
+    def fit(self, paths, **kwargs):
         featmat = np.concatenate([self._features(path) for path in paths])
         returns = np.concatenate([path["returns"] for path in paths])
         reg_coeff = self._reg_coeff

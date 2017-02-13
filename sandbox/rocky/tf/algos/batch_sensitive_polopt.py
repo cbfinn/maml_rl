@@ -1,3 +1,6 @@
+import matplotlib
+matplotlib.use('Pdf')
+
 import time
 from rllab.algos.base import RLAlgorithm
 import rllab.misc.logger as logger
@@ -41,6 +44,7 @@ class BatchSensitivePolopt(RLAlgorithm):
             sampler_cls=None,
             sampler_args=None,
             force_batch_sampler=False,
+            use_sensitive=True,
             **kwargs
     ):
         """
@@ -126,15 +130,30 @@ class BatchSensitivePolopt(RLAlgorithm):
                 itr_start_time = time.time()
                 with logger.prefix('itr #%d | ' % itr):
                     # TODO - this is specific to the pointmass task / goal task.
-                    # TODO TODO for debugging - 2 options.
-                    # 0d
-                    learner_env_goals = np.zeros((self.meta_batch_size, 2, ))
-                    goals = [np.array([-0.5,0]), np.array([0.5,0])]
-                    for i in range(self.meta_batch_size):
-                        learner_env_goals[i,:] = goals[np.random.randint(2)]
-                    # 1d
-                    #learner_env_goals = np.random.uniform(0, 1, size=(self.meta_batch_size, 2, ))
-                    #learner_env_goals[:, 1] = 0
+                    # point mass:
+                    if self.env.observation_space.shape[0] <= 4:  # pointmass (oracle=4, normal=2)
+                        learner_env_goals = np.zeros((self.meta_batch_size, 2, ))
+                        """
+                        # 0d
+                        goals = [np.array([-0.5,0]), np.array([0.5,0])]
+                        goals = [np.array([0.5,0.1]), np.array([0.5,-0.1])]
+                        goals = [np.array([0.5,0.0]), np.array([-0.5,0.0]),
+                                 np.array([0.0,0.5]), np.array([0.0,-0.5]),
+                                 np.array([0.5,0.5]), np.array([0.5,-0.5]),
+                                 np.array([-0.5,0.5]), np.array([-0.5,-0.5]),
+                                 ]
+                        for i in range(self.meta_batch_size):
+                            learner_env_goals[i,:] = goals[np.random.randint(len(goals))]
+                        """
+                        # 2d
+                        learner_env_goals = np.random.uniform(-0.5, 0.5, size=(self.meta_batch_size, 2, ))
+                        #learner_env_goals[:, 1] = 0  # this makes it 1d
+                    elif self.env.observation_space.shape[0] == 13:  # swimmer
+                        #learner_env_goals = np.random.choice((0.1, 0.2), (self.meta_batch_size, ))
+                        #learner_env_goals = np.random.uniform(0.1, 0.2, (self.meta_batch_size, ))
+                        learner_env_goals = np.random.uniform(0.0, 0.2, (self.meta_batch_size, ))
+                    else:
+                        raise NotImplementedError('unrecognized env')
 
                     logger.log("Obtaining samples using the pre-update policy...")
                     self.policy.switch_to_init_dist()  # Switch to pre-update policy
@@ -158,9 +177,22 @@ class BatchSensitivePolopt(RLAlgorithm):
                     for key in postupdate_paths.keys():
                         updated_samples_data[key] = self.process_samples(itr, postupdate_paths[key], log=False)
                     # for logging purposes only
-                    self.process_samples(itr, flatten_list(postupdate_paths.values()), prefix='Post', log=True)
+                    self.process_samples(itr, flatten_list(postupdate_paths.values()), prefix='Post1', log=True)
                     logger.log("Logging post-update diagnostics...")
-                    self.log_diagnostics(flatten_list(postupdate_paths.values()), prefix='Post')
+                    self.log_diagnostics(flatten_list(postupdate_paths.values()), prefix='Post1')
+
+                    if itr % 20 == 0:
+                        # test policy
+                        logger.log('Testing multiple steps')
+                        new_samples_data = updated_samples_data
+                        for test_i in range(3):
+                            self.policy.compute_updated_dists(new_samples_data)
+                            new_paths = self.obtain_samples(itr, reset_args=learner_env_goals)
+                            new_samples_data = {}
+                            for key in new_paths.keys():
+                                new_samples_data[key] = self.process_samples(itr, new_paths[key], log=False)
+                                # for logging purposes only
+                            self.process_samples(itr, flatten_list(new_paths.values()), prefix='Post'+str(test_i+2), log=True)
 
                     logger.log("Optimizing policy...")
                     # This needs to take both init_samples_data and samples_data
@@ -173,23 +205,56 @@ class BatchSensitivePolopt(RLAlgorithm):
                     logger.log("Saved")
                     logger.record_tabular('Time', time.time() - start_time)
                     logger.record_tabular('ItrTime', time.time() - itr_start_time)
-                    if self.plot and itr % 2 == 0:
+                    #if self.plot and itr % 2 == 0:
+                    if itr % 2 == 0 and self.env.observation_space.shape[0] <= 4: # point-mass
                         logger.log("Saving visualization of paths")
                         import matplotlib.pyplot as plt;
                         for ind in range(5):
                             plt.clf()
                             plt.plot(learner_env_goals[ind][0], learner_env_goals[ind][1], 'k*', markersize=10)
                             plt.hold(True)
+
                             pre_points = preupdate_paths[ind][0]['observations']
                             post_points = postupdate_paths[ind][0]['observations']
-
                             plt.plot(pre_points[:,0], pre_points[:,1], '-r', linewidth=2)
-                            plt.plot(post_points[:,0], post_points[:,1], '-.b', linewidth=2)
+                            plt.plot(post_points[:,0], post_points[:,1], '-b', linewidth=1)
+
+                            pre_points = preupdate_paths[ind][1]['observations']
+                            post_points = postupdate_paths[ind][1]['observations']
+                            plt.plot(pre_points[:,0], pre_points[:,1], '--r', linewidth=2)
+                            plt.plot(post_points[:,0], post_points[:,1], '--b', linewidth=1)
+
+                            pre_points = preupdate_paths[ind][2]['observations']
+                            post_points = postupdate_paths[ind][2]['observations']
+                            plt.plot(pre_points[:,0], pre_points[:,1], '-.r', linewidth=2)
+                            plt.plot(post_points[:,0], post_points[:,1], '-.b', linewidth=1)
+
                             plt.plot(0,0, 'k.', markersize=5)
-                            plt.xlim([-1.0, 1.0])
-                            plt.ylim([-1.0, 1.0])
+                            plt.xlim([-0.8, 0.8])
+                            plt.ylim([-0.8, 0.8])
                             plt.legend(['goal', 'preupdate path', 'postupdate path'])
                             plt.savefig('/home/cfinn/prepost_path'+str(ind)+'.png')
+                    elif itr % 2 == 0:  # swimmer
+                        logger.log("Saving visualization of paths")
+                        import matplotlib.pyplot as plt;
+                        for ind in range(5):
+                            plt.clf()
+                            goal_vel = learner_env_goals[ind]
+                            plt.title('Swimmer paths, goal vel='+str(goal_vel))
+                            plt.hold(True)
+
+                            prepathobs = preupdate_paths[ind][0]['observations']
+                            postpathobs = postupdate_paths[ind][0]['observations']
+                            plt.plot(prepathobs[:,0], prepathobs[:,1], '-r', linewidth=2)
+                            plt.plot(postpathobs[:,0], postpathobs[:,1], '--b', linewidth=1)
+                            plt.plot(prepathobs[-1,0], prepathobs[-1,1], 'r*', markersize=10)
+                            plt.plot(postpathobs[-1,0], postpathobs[-1,1], 'b*', markersize=10)
+                            plt.xlim([-1.0, 5.0])
+                            plt.ylim([-1.0, 1.0])
+
+                            plt.legend(['preupdate path', 'postupdate path'], loc=2)
+                            plt.savefig('/home/cfinn/swim1dlarge_prepost_itr'+str(itr)+'_id'+str(ind)+'.pdf')
+
                     logger.dump_tabular(with_prefix=False)
                     #if self.plot:
                     #    self.update_plot()
@@ -199,7 +264,7 @@ class BatchSensitivePolopt(RLAlgorithm):
         self.shutdown_worker()
 
     def log_diagnostics(self, paths, prefix):
-        self.env.log_diagnostics(paths)
+        self.env.log_diagnostics(paths, prefix)
         self.policy.log_diagnostics(paths, prefix)
         self.baseline.log_diagnostics(paths)
 
