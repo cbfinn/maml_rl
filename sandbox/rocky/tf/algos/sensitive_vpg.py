@@ -97,8 +97,6 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
             logli = dist.log_likelihood_sym(action_vars[i], dist_info_vars)
             surr_objs.append(- tf.reduce_mean(logli * adv_vars[i]))
 
-
-        # TODO - add option/flag for baseline.
         surr_obj = tf.reduce_mean(tf.pack(surr_objs, 0))
         new_input_list = input_list + obs_vars + action_vars + adv_vars
 

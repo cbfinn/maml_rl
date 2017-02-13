@@ -196,7 +196,8 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
                     trainable=learn_std,
                 )
                 forward_std = lambda x, params: forward_param_layer(x, params['std_param'])
-            self.all_params = self.init_params
+            self.all_param_vals = None
+            #self.all_params = self.init_params
 
             # unify forward mean and forward std into a single function
             self._forward = lambda obs, params, is_train: (
@@ -237,6 +238,8 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         return True
 
     def set_init_surr_obj(self, input_list, surr_objs_tensor):
+        """ Set the surrogate objectives used the update the sampling policy.
+        """
         self.input_list_for_grad = input_list
         self.surr_objs = surr_objs_tensor
 
@@ -265,39 +268,33 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
 
         # To do a second update, replace self.all_params below with the params that were used to collect the policy.
         init_param_values = None
-        if type(self.all_params) == list:
+        if self.all_param_vals is not None:
             init_param_values = self.get_variable_values(self.init_params)
 
         step_size = self.step_size
         for i in range(num_tasks):
-            if type(self.all_params) == list: # TODO - clean this, self.all_params are values not tensors
-                self.assign_params(self.init_params, self.all_params[i])
+            if self.all_param_vals is not None: # TODO - clean this, self.all_params are values not tensors
+                self.assign_params(self.init_params, self.all_param_vals[i])
             if type(self.step_size) == list:
                 step_size = self.step_size_vars[i]
 
         if 'all_fast_params_tensor' not in dir(self):
+            # make computation graph once
             self.all_fast_params_tensor = []
             for i in range(num_tasks):
-                # TODO - don't construct this computation graph more than once.
                 gradients = dict(zip(param_keys, tf.gradients(self.surr_objs[i], self.init_params.values())))
                 fast_params_tensor = dict(zip(param_keys, [self.init_params[key] - step_size*gradients[key] for key in param_keys]))
                 self.all_fast_params_tensor.append(fast_params_tensor)
-        # pull params out of tensorflow.
-        self.all_params = sess.run(self.all_fast_params_tensor, feed_dict=dict(list(zip(self.input_list_for_grad, inputs))))
+
+        # pull new param vals out of tensorflow, so gradient computation only done once
+        self.all_param_vals = sess.run(self.all_fast_params_tensor, feed_dict=dict(list(zip(self.input_list_for_grad, inputs))))
 
         if init_param_values is not None:
             self.assign_params(self.init_params, init_param_values)
 
-        # TODO TODO - trying out no std param update
-        #for key in self.all_params.keys():
-        #    if 'std' in key:
-        #        for i in range(num_tasks):
-        #            fast_params_per_task[i][key] = self.all_params[key]
-
         for i in range(num_tasks):
-
             # TODO - use a placeholder to feed in the params, so that we don't have to recompile every time.
-            info = self.dist_info_sym(self.input_tensor, dict(), all_params=self.all_params[i],
+            info = self.dist_info_sym(self.input_tensor, dict(), all_params=self.all_param_vals[i],
                     is_training=False)
 
             # before sensitive update
@@ -339,7 +336,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
 
     def switch_to_init_dist(self):
         self._cur_f_dist = self._init_f_dist
-        self.all_params = self.init_params
+        self.all_param_vals = None
         if type(self.step_size) == list:
             self.step_size_vals = None
 

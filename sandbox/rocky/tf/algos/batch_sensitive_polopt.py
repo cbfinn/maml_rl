@@ -182,8 +182,7 @@ class BatchSensitivePolopt(RLAlgorithm):
                     self.log_diagnostics(flatten_list(postupdate_paths.values()), prefix='Post1')
 
                     if itr % 20 == 0:
-                        # test policy
-                        logger.log('Testing multiple steps')
+                        logger.log('Testing policy with multiple grad steps')
                         new_samples_data = updated_samples_data
                         for test_i in range(3):
                             self.policy.compute_updated_dists(new_samples_data)
