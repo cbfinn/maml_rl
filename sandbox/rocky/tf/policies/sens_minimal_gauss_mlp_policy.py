@@ -273,7 +273,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
 
         step_size = self.step_size
         for i in range(num_tasks):
-            if self.all_param_vals is not None: # TODO - clean this, self.all_params are values not tensors
+            if self.all_param_vals is not None:
                 self.assign_params(self.init_params, self.all_param_vals[i])
             if type(self.step_size) == list:
                 step_size = self.step_size_vars[i]
@@ -372,11 +372,6 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         param_keys = init_params.keys()
         gradients = dict(zip(param_keys, tf.gradients(init_surr_obj, init_params.values())))
         fast_params_tensor = dict(zip(param_keys, [init_params[key] - step_size*gradients[key] for key in param_keys]))
-
-        # TODO TODO - trying out no std param update
-        #for key in self.all_params.keys():
-        #    if 'std' in key:
-        #        fast_params_tensor[key] = self.all_params[key]
 
         return self.dist_info_sym(new_obs_var, all_params=fast_params_tensor, is_training=is_training)
 
