@@ -3,13 +3,13 @@ from rllab.misc import tensor_utils
 import time
 
 
-def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1):
-    # NOTE - not used... (with vpg_point)
+def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1, save_video=True, video_filename='/home/cfinn/sim_out.mp4'):
     observations = []
     actions = []
     rewards = []
     agent_infos = []
     env_infos = []
+    images = []
     o = env.reset()
     agent.reset()
     path_length = 0
@@ -31,7 +31,17 @@ def rollout(env, agent, max_path_length=np.inf, animated=False, speedup=1):
             env.render()
             timestep = 0.05
             time.sleep(timestep / speedup)
+            if save_video:
+                from PIL import Image
+                image = env.wrapped_env.wrapped_env.get_viewer().get_image()
+                pil_image = Image.frombytes('RGB', (image[1], image[2]), image[0])
+                images.append(np.flipud(np.array(pil_image)))
+
     if animated:
+        if save_video:
+            import moviepy.editor as mpy
+            clip = mpy.ImageSequenceClip(images, fps=20*speedup)
+            clip.write_videofile(video_filename, fps=20*speedup)
         return
 
     return dict(
