@@ -22,6 +22,7 @@ baselines = ['linear']
 fast_batch_size = 10  # 10 works for [0.1, 0.2], 20 doesn't improve much for [0,0.2]
 meta_batch_size = 20  # 10 also works, but much less stable
 max_path_length = 500
+num_grad_updates = 2
 
 for fast_learning_rate in fast_learning_rates:
     for learning_rate in learning_rates:
@@ -50,6 +51,7 @@ for fast_learning_rate in fast_learning_rates:
                 batch_size=fast_batch_size, # number of trajs for grad update
                 max_path_length=max_path_length,
                 meta_batch_size=meta_batch_size,
+                num_grad_updates=num_grad_updates,
                 n_itr=200,
                 use_sensitive=True,
                 optimizer_args={'tf_optimizer_args':{'learning_rate': learning_rate}},
@@ -65,6 +67,6 @@ for fast_learning_rate in fast_learning_rates:
                 #exp_prefix='sensitive1dT5_2017_01_19',
                 #exp_prefix='bugfix_sensitive0d_8tasks_T'+str(max_path_length)+'_2017_02_05',
                 exp_prefix='sensitive_swimmer_2017_02_10_1dlarge',
-                exp_name='bignet_sensitive_fbs'+str(fast_batch_size)+'_mbs'+str(meta_batch_size)+'_flr_' + str(fast_learning_rate) + '_lr_' + str(learning_rate) + 'baseline_' + bas +'_length'+str(),
+                exp_name='bignet_sensitive_fbs'+str(fast_batch_size)+'_mbs'+str(meta_batch_size)+'_flr_' + str(fast_learning_rate) + '_lr_' + str(learning_rate) + 'baseline_' + bas +'_step'+str(num_grad_updates),
                 plot=False,
             )

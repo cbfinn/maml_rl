@@ -40,70 +40,81 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
         self.use_sensitive = use_sensitive
         super(SensitiveVPG, self).__init__(env=env, policy=policy, baseline=baseline, use_sensitive=use_sensitive, **kwargs)
 
+
+    def make_vars(self, stepnum='0'):
+        # lists over the meta_batch_size
+        obs_vars, action_vars, adv_vars = [], [], []
+        for i in range(self.meta_batch_size):
+            obs_vars.append(self.env.observation_space.new_tensor_variable(
+                'obs' + stepnum + '_' + str(i),
+                extra_dims=1,
+            ))
+            action_vars.append(self.env.action_space.new_tensor_variable(
+                'action' + stepnum + '_' + str(i),
+                extra_dims=1,
+            ))
+            adv_vars.append(tensor_utils.new_tensor(
+                name='advantage' + stepnum + '_' + str(i),
+                ndim=1, dtype=tf.float32,
+            ))
+        return obs_vars, action_vars, adv_vars
+
+
     @overrides
     def init_opt(self):
         # TODO Commented out all KL stuff for now, since it is only used for logging
+
         is_recurrent = int(self.policy.recurrent)
         assert not is_recurrent
         dist = self.policy.distribution
 
         state_info_vars, state_info_vars_list = {}, []
 
-        init_obs_vars, init_action_vars, init_adv_vars = [], [], []
-        init_surr_objs = []
-        for i in range(self.meta_batch_size):
-            init_obs_vars.append(self.env.observation_space.new_tensor_variable(
-                'init_obs' + str(i),
-                extra_dims=1 + is_recurrent,
-            ))
-            init_action_vars.append(self.env.action_space.new_tensor_variable(
-                'init_action' + str(i),
-                extra_dims=1 + is_recurrent,
-            ))
-            init_adv_vars.append(tensor_utils.new_tensor(
-                name='init_advantage' + str(i),
-                ndim=1 + is_recurrent,
-                dtype=tf.float32,
-            ))
+        all_surr_objs, input_list = [], []
+        new_params = None
+        for j in range(self.num_grad_updates):
+            obs_vars, action_vars, adv_vars = self.make_vars(str(j))
+            surr_objs = []
 
-            init_dist_info_vars = self.policy.dist_info_sym(init_obs_vars[i], state_info_vars)
-            logli = dist.log_likelihood_sym(init_action_vars[i], init_dist_info_vars)
+            cur_params = new_params
+            new_params = []
 
-            # formulate as a minimization problem
-            # The gradient of the surrogate objective is the policy gradient
-            init_surr_objs.append(- tf.reduce_mean(logli * init_adv_vars[i]))
+            for i in range(self.meta_batch_size):
+                if j == 0:
+                    dist_info_vars, params = self.policy.dist_info_sym(obs_vars[i], state_info_vars)
+                else:
+                    dist_info_vars, params = self.policy.updated_dist_info_sym(i, all_surr_objs[-1][i], obs_vars[i], params_dict=cur_params[i])
 
-        # For computing the fast update for sampling
-        input_list = init_obs_vars + init_action_vars + init_adv_vars + state_info_vars_list
-        self.policy.set_init_surr_obj(input_list, init_surr_objs)
+                new_params.append(params)
+                logli = dist.log_likelihood_sym(action_vars[i], dist_info_vars)
 
-        obs_vars, action_vars, adv_vars = [], [], []
+                # formulate as a minimization problem
+                # The gradient of the surrogate objective is the policy gradient
+                surr_objs.append(- tf.reduce_mean(logli * adv_vars[i]))
+
+            input_list += obs_vars + action_vars + adv_vars + state_info_vars_list
+            if j == 0:
+                # For computing the fast update for sampling
+                self.policy.set_init_surr_obj(input_list, surr_objs)
+                init_input_list = input_list
+
+            all_surr_objs.append(surr_objs)
+
+
+        obs_vars, action_vars, adv_vars = self.make_vars('test')
         surr_objs = []
         for i in range(self.meta_batch_size):
-            obs_vars.append(self.env.observation_space.new_tensor_variable(
-                'obs' + str(i),
-                extra_dims=1 + is_recurrent,
-            ))
-            action_vars.append(self.env.action_space.new_tensor_variable(
-                'action' + str(i),
-                extra_dims=1 + is_recurrent,
-            ))
-            adv_vars.append(tensor_utils.new_tensor(
-                name='advantage' + str(i),
-                ndim=1 + is_recurrent,
-                dtype=tf.float32,
-            ))
-            dist_info_vars = self.policy.updated_dist_info_sym(i, init_obs_vars[i], init_surr_objs[i], obs_vars[i], state_info_vars)
+            dist_info_vars, _ = self.policy.updated_dist_info_sym(i, all_surr_objs[-1][i], obs_vars[i], params_dict=new_params[i])
             logli = dist.log_likelihood_sym(action_vars[i], dist_info_vars)
             surr_objs.append(- tf.reduce_mean(logli * adv_vars[i]))
 
         surr_obj = tf.reduce_mean(tf.pack(surr_objs, 0))
-        new_input_list = input_list + obs_vars + action_vars + adv_vars
+        input_list += obs_vars + action_vars + adv_vars
 
         if self.use_sensitive:
-            self.optimizer.update_opt(loss=surr_obj, target=self.policy, inputs=new_input_list)
+            self.optimizer.update_opt(loss=surr_obj, target=self.policy, inputs=input_list)
         else:  # baseline method of just training initial policy
-            self.optimizer.update_opt(loss=tf.reduce_mean(tf.pack(init_surr_objs,0)), target=self.policy, inputs=input_list)
+            self.optimizer.update_opt(loss=tf.reduce_mean(tf.pack(all_surr_objs[0],0)), target=self.policy, inputs=init_input_list)
 
         #f_kl = tensor_utils.compile_function(
         #    inputs=input_list + old_dist_info_vars_list,
@@ -115,39 +126,34 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
 
 
     @overrides
-    def optimize_policy(self, itr, init_samples_data, updated_samples_data):
+    def optimize_policy(self, itr, all_samples_data):
         logger.log("optimizing policy")
-
-        init_obs_list, init_action_list, init_adv_list = [], [], []
-        for i in range(self.meta_batch_size):
-            inputs = ext.extract(
-                init_samples_data[i],
-                "observations", "actions", "advantages"
-            )
-            init_obs_list.append(inputs[0])
-            init_action_list.append(inputs[1])
-            init_adv_list.append(inputs[2])
-
-        obs_list, action_list, adv_list = [], [], []
-        for i in range(self.meta_batch_size):
-            inputs = ext.extract(
-                updated_samples_data[i],
-                "observations", "actions", "advantages"
-            )
-            obs_list.append(inputs[0])
-            action_list.append(inputs[1])
-            adv_list.append(inputs[2])
-
-        init_inputs = init_obs_list + init_action_list + init_adv_list
-        inputs = init_inputs + obs_list + action_list + adv_list
+        assert len(all_samples_data) == self.num_grad_updates + 1
 
         if not self.use_sensitive:
-            # baseline of only training initial policy
-            inputs = init_inputs
+            all_samples_data = [all_samples_data[0]]
 
-        loss_before = self.optimizer.loss(inputs)
-        self.optimizer.optimize(inputs)
-        loss_after = self.optimizer.loss(inputs)
+        input_list = []
+        for step in range(len(all_samples_data)):
+            obs_list, action_list, adv_list = [], [], []
+            for i in range(self.meta_batch_size):
+
+
+                inputs = ext.extract(
+                    all_samples_data[step][i],
+                    "observations", "actions", "advantages"
+                )
+                obs_list.append(inputs[0])
+                action_list.append(inputs[1])
+                adv_list.append(inputs[2])
+            input_list += obs_list + action_list + adv_list
+
+            if step == 0:
+                init_inputs = input_list
+
+        loss_before = self.optimizer.loss(input_list)
+        self.optimizer.optimize(input_list)
+        loss_after = self.optimizer.loss(input_list)
         logger.record_tabular("LossBefore", loss_before)
         logger.record_tabular("LossAfter", loss_after)
 

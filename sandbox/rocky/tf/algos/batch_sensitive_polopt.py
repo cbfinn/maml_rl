@@ -32,6 +32,7 @@ class BatchSensitivePolopt(RLAlgorithm):
             batch_size=100,
             max_path_length=500,
             meta_batch_size = 100,
+            num_grad_updates=1,
             discount=0.99,
             gae_lambda=1,
             plot=False,
@@ -58,6 +59,8 @@ class BatchSensitivePolopt(RLAlgorithm):
         :param start_itr: Starting iteration.
         :param batch_size: Number of samples per iteration.  #
         :param max_path_length: Maximum length of a single rollout.
+        :param meta_batch_size: Number of tasks sampled per meta-update
+        :param num_grad_updates: Number of fast gradient updates
         :param discount: Discount.
         :param gae_lambda: Lambda used for generalized advantage estimation.
         :param plot: Plot evaluation run after each iteration.
@@ -88,6 +91,7 @@ class BatchSensitivePolopt(RLAlgorithm):
         self.whole_paths = whole_paths
         self.fixed_horizon = fixed_horizon
         self.meta_batch_size = meta_batch_size # number of tasks
+        self.num_grad_updates = num_grad_updates
 
         if sampler_cls is None:
             if self.policy.vectorized and not force_batch_sampler:
@@ -155,8 +159,31 @@ class BatchSensitivePolopt(RLAlgorithm):
                     else:
                         raise NotImplementedError('unrecognized env')
 
-                    logger.log("Obtaining samples using the pre-update policy...")
                     self.policy.switch_to_init_dist()  # Switch to pre-update policy
+
+
+                    all_samples_data, all_paths = [], []
+                    for step in range(self.num_grad_updates+1):
+                        logger.log('** Step ' + str(step) + ' **')
+                        logger.log("Obtaining samples...")
+                        paths = self.obtain_samples(itr, reset_args=learner_env_goals)
+                        all_paths.append(paths)
+                        logger.log("Processing samples...")
+                        samples_data = {}
+                        for key in paths.keys():
+                            samples_data[key] = self.process_samples(itr, paths[key], log=False)
+                        all_samples_data.append(samples_data)
+                        # for logging purposes only
+                        self.process_samples(itr, flatten_list(paths.values()), prefix=str(step), log=True)
+                        logger.log("Logging diagnostics...")
+                        self.log_diagnostics(flatten_list(paths.values()), prefix=str(step))
+                        if step < self.num_grad_updates:
+                            logger.log("Computing policy updates...")
+                            self.policy.compute_updated_dists(samples_data)
+
+
+                    """
+
                     preupdate_paths = self.obtain_samples(itr, reset_args=learner_env_goals)
                     logger.log("Processing samples...")
                     init_samples_data = {}
@@ -192,14 +219,15 @@ class BatchSensitivePolopt(RLAlgorithm):
                                 new_samples_data[key] = self.process_samples(itr, new_paths[key], log=False)
                                 # for logging purposes only
                             self.process_samples(itr, flatten_list(new_paths.values()), prefix='Post'+str(test_i+2), log=True)
+                    """
 
                     logger.log("Optimizing policy...")
                     # This needs to take both init_samples_data and samples_data
-                    self.optimize_policy(itr, init_samples_data, updated_samples_data)
+                    self.optimize_policy(itr, all_samples_data)
                     logger.log("Saving snapshot...")
-                    params = self.get_itr_snapshot(itr, updated_samples_data)  # , **kwargs)
+                    params = self.get_itr_snapshot(itr, all_samples_data[-1])  # , **kwargs)
                     if self.store_paths:
-                        params["paths"] = updated_samples_data["paths"]
+                        params["paths"] = all_samples_data[-1]["paths"]
                     logger.save_itr_params(itr, params)
                     logger.log("Saved")
                     logger.record_tabular('Time', time.time() - start_time)
@@ -212,6 +240,9 @@ class BatchSensitivePolopt(RLAlgorithm):
                             plt.clf()
                             plt.plot(learner_env_goals[ind][0], learner_env_goals[ind][1], 'k*', markersize=10)
                             plt.hold(True)
+
+                            preupdate_paths = all_paths[0]
+                            postupdate_paths = all_paths[-1]
 
                             pre_points = preupdate_paths[ind][0]['observations']
                             post_points = postupdate_paths[ind][0]['observations']
@@ -242,8 +273,9 @@ class BatchSensitivePolopt(RLAlgorithm):
                             plt.title('Swimmer paths, goal vel='+str(goal_vel))
                             plt.hold(True)
 
-                            prepathobs = preupdate_paths[ind][0]['observations']
-                            postpathobs = postupdate_paths[ind][0]['observations']
+
+                            prepathobs = all_paths[0][ind][0]['observations']
+                            postpathobs = all_paths[-1][ind][0]['observations']
                             plt.plot(prepathobs[:,0], prepathobs[:,1], '-r', linewidth=2)
                             plt.plot(postpathobs[:,0], postpathobs[:,1], '--b', linewidth=1)
                             plt.plot(prepathobs[-1,0], prepathobs[-1,1], 'r*', markersize=10)
