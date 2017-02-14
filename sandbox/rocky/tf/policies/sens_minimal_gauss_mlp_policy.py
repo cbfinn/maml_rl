@@ -302,7 +302,6 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
             outputs = outputs,
         )
 
-        self._cur_f_dist = self._updated_f_dist
 
     def get_variable_values(self, tensor_dict):
         sess = tf.get_default_session()

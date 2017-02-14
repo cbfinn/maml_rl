@@ -181,33 +181,7 @@ class BatchSensitivePolopt(RLAlgorithm):
                             logger.log("Computing policy updates...")
                             self.policy.compute_updated_dists(samples_data)
 
-
                     """
-
-                    preupdate_paths = self.obtain_samples(itr, reset_args=learner_env_goals)
-                    logger.log("Processing samples...")
-                    init_samples_data = {}
-                    for key in preupdate_paths.keys():
-                        init_samples_data[key] = self.process_samples(itr, preupdate_paths[key], log=False)
-                    # for logging purposes only
-                    self.process_samples(itr, flatten_list(preupdate_paths.values()), prefix='Pre', log=True)
-                    logger.log("Logging pre-update diagnostics...")
-                    self.log_diagnostics(flatten_list(preupdate_paths.values()), prefix='Pre')
-
-                    logger.log("Computing policy updates...")
-                    self.policy.compute_updated_dists(init_samples_data)
-
-                    logger.log("Obtaining samples using the post-update policies...")
-                    postupdate_paths = self.obtain_samples(itr, reset_args=learner_env_goals)
-                    logger.log("Processing samples...")
-                    updated_samples_data = {}
-                    for key in postupdate_paths.keys():
-                        updated_samples_data[key] = self.process_samples(itr, postupdate_paths[key], log=False)
-                    # for logging purposes only
-                    self.process_samples(itr, flatten_list(postupdate_paths.values()), prefix='Post1', log=True)
-                    logger.log("Logging post-update diagnostics...")
-                    self.log_diagnostics(flatten_list(postupdate_paths.values()), prefix='Post1')
-
                     if itr % 20 == 0:
                         logger.log('Testing policy with multiple grad steps')
                         new_samples_data = updated_samples_data
