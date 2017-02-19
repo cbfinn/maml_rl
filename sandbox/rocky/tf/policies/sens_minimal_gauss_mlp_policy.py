@@ -280,7 +280,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
             # make computation graph once
             self.all_fast_params_tensor = []
             for i in range(num_tasks):
-                gradients = dict(zip(param_keys, tf.gradients(self.surr_objs[i], self.all_params.values())))
+                gradients = dict(zip(param_keys, tf.gradients(self.surr_objs[i], list(self.all_params.values()))))
                 fast_params_tensor = dict(zip(param_keys, [self.all_params[key] - step_size*gradients[key] for key in param_keys]))
                 self.all_fast_params_tensor.append(fast_params_tensor)
 
@@ -373,7 +373,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
             params_dict = self.all_params
         param_keys = self.all_params.keys()
 
-        gradients = dict(zip(param_keys, tf.gradients(surr_obj, params_dict.values())))
+        gradients = dict(zip(param_keys, tf.gradients(surr_obj, list(params_dict.values()))))
         params_dict = dict(zip(param_keys, [params_dict[key] - step_size*gradients[key] for key in param_keys]))
 
         return self.dist_info_sym(new_obs_var, all_params=params_dict, is_training=is_training)
