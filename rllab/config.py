@@ -41,6 +41,8 @@ AWS_SECURITY_GROUP_IDS = []
 
 AWS_NETWORK_INTERFACES = []
 
+AWS_EXTRA_CONFIGS = dict()
+
 AWS_REGION_NAME = "us-east-1"
 
 CODE_SYNC_IGNORES = ["*.git/*", "*data/*", "*.pod/*"]
@@ -68,6 +70,8 @@ MUJOCO_KEY_PATH = osp.expanduser("~/.mujoco")
 
 ENV = {}
 
+EBS_OPTIMIZED = True
+
 if osp.exists(osp.join(osp.dirname(__file__), "config_personal.py")):
     from .config_personal import *
 else:
@@ -81,3 +85,4 @@ else:
         print("Exiting.")
         import sys; sys.exit(0)
 
+LABEL = ""

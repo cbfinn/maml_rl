@@ -7,7 +7,7 @@ from rllab.misc import logger
 from rllab.misc import autoargs
 
 
-class SwimmerRandGoalEnv(MujocoEnv, Serializable):
+class SwimmerRandGoalOracleEnv(MujocoEnv, Serializable):
 
     FILE = 'swimmer.xml'
 
@@ -19,15 +19,16 @@ class SwimmerRandGoalEnv(MujocoEnv, Serializable):
             *args, **kwargs):
         self.ctrl_cost_coeff = ctrl_cost_coeff
         self._goal_vel = None
-        super(SwimmerRandGoalEnv, self).__init__(*args, **kwargs)
+        super(SwimmerRandGoalOracleEnv, self).__init__(*args, **kwargs)
         Serializable.quick_init(self, locals())
 
     def get_current_obs(self):
-        return np.concatenate([
+        obs = np.concatenate([
             self.model.data.qpos.flat,
             self.model.data.qvel.flat,
             self.get_body_com("torso").flat,
         ]).reshape(-1)
+        return np.r_[obs, np.array([self._goal_vel])]
 
     @overrides
     def reset(self, init_state=None, reset_args=None, **kwargs):
@@ -35,12 +36,13 @@ class SwimmerRandGoalEnv(MujocoEnv, Serializable):
         if goal_vel is not None:
             self._goal_vel = goal_vel
         else:
-            self._goal_vel = np.random.uniform(0.1, 0.2)
+            self._goal_vel = np.random.uniform(0.1, 0.2) # works if this is set to 0.15
         self.reset_mujoco(init_state)
         self.model.forward()
         self.current_com = self.model.data.com_subtree[0]
         self.dcom = np.zeros_like(self.current_com)
-        return self.get_current_obs()
+        obs = self.get_current_obs()
+        return obs
 
     def step(self, action):
         self.forward_dynamics(action)

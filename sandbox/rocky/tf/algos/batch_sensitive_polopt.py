@@ -152,10 +152,10 @@ class BatchSensitivePolopt(RLAlgorithm):
                         # 2d
                         learner_env_goals = np.random.uniform(-0.5, 0.5, size=(self.meta_batch_size, 2, ))
                         #learner_env_goals[:, 1] = 0  # this makes it 1d
-                    elif self.env.observation_space.shape[0] == 13:  # swimmer
+                    elif self.env.observation_space.shape[0] >= 13:  # swimmer
                         #learner_env_goals = np.random.choice((0.1, 0.2), (self.meta_batch_size, ))
-                        #learner_env_goals = np.random.uniform(0.1, 0.2, (self.meta_batch_size, ))
-                        learner_env_goals = np.random.uniform(0.0, 0.2, (self.meta_batch_size, ))
+                        learner_env_goals = np.random.uniform(0.1, 0.2, (self.meta_batch_size, ))
+                        #learner_env_goals = np.random.uniform(0.0, 0.2, (self.meta_batch_size, ))
                     else:
                         raise NotImplementedError('unrecognized env')
 
@@ -207,6 +207,7 @@ class BatchSensitivePolopt(RLAlgorithm):
                     logger.record_tabular('Time', time.time() - start_time)
                     logger.record_tabular('ItrTime', time.time() - itr_start_time)
                     #if self.plot and itr % 2 == 0:
+                    """
                     if itr % 2 == 0 and self.env.observation_space.shape[0] <= 4: # point-mass
                         logger.log("Saving visualization of paths")
                         import matplotlib.pyplot as plt;
@@ -241,7 +242,7 @@ class BatchSensitivePolopt(RLAlgorithm):
                     elif itr % 2 == 0:  # swimmer
                         logger.log("Saving visualization of paths")
                         import matplotlib.pyplot as plt;
-                        for ind in range(5):
+                        for ind in range(min(5, self.meta_batch_size)):
                             plt.clf()
                             goal_vel = learner_env_goals[ind]
                             plt.title('Swimmer paths, goal vel='+str(goal_vel))
@@ -258,7 +259,8 @@ class BatchSensitivePolopt(RLAlgorithm):
                             plt.ylim([-1.0, 1.0])
 
                             plt.legend(['preupdate path', 'postupdate path'], loc=2)
-                            plt.savefig('/home/cfinn/swim1dlarge_prepost_itr'+str(itr)+'_id'+str(ind)+'.pdf')
+                            plt.savefig('/home/cfinn/swim1d_prepost_itr'+str(itr)+'_id'+str(ind)+'.pdf')
+                    """
 
                     logger.dump_tabular(with_prefix=False)
                     #if self.plot:

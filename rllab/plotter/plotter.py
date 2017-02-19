@@ -1,5 +1,9 @@
 import atexit
-from Queue import Empty
+import sys
+if sys.version_info[0] == 2:
+    from Queue import Empty
+else:
+    from queue import Empty
 from multiprocessing import Process, Queue
 from rllab.sampler.utils import rollout
 import numpy as np

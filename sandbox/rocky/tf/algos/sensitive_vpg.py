@@ -68,6 +68,14 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
         assert not is_recurrent
         dist = self.policy.distribution
 
+        old_dist_info_vars, old_dist_info_vars_list = [], []
+        for i in range(self.meta_batch_size):
+            old_dist_info_vars.append({
+                k: tf.placeholder(tf.float32, shape=[None] + list(shape), name='old_%s_%s' % (i, k))
+                for k, shape in dist.dist_info_specs
+                })
+            old_dist_info_vars_list += [old_dist_info_vars[i][k] for k in dist.dist_info_keys]
+
         state_info_vars, state_info_vars_list = {}, []
 
         all_surr_objs, input_list = [], []
@@ -103,18 +111,37 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
 
         obs_vars, action_vars, adv_vars = self.make_vars('test')
         surr_objs = []
+        kls = []
         for i in range(self.meta_batch_size):
             dist_info_vars, _ = self.policy.updated_dist_info_sym(i, all_surr_objs[-1][i], obs_vars[i], params_dict=new_params[i])
             logli = dist.log_likelihood_sym(action_vars[i], dist_info_vars)
             surr_objs.append(- tf.reduce_mean(logli * adv_vars[i]))
 
+            kls.append(dist.kl_sym(old_dist_info_vars[i], dist_info_vars))
+
         surr_obj = tf.reduce_mean(tf.pack(surr_objs, 0))
+        mean_kl = tf.reduce_mean(tf.pack(kls, 0))
+        max_kl = tf.reduce_max(tf.pack(kls, 0))
         input_list += obs_vars + action_vars + adv_vars
+
+        # TODO - make this not hacky if it does something decent
+        self.all_steps_opt = True
+        if self.all_steps_opt:
+            for j in range(1, self.num_grad_updates):
+                surr_obj += tf.reduce_mean(tf.pack(all_surr_objs[j], 0))
 
         if self.use_sensitive:
             self.optimizer.update_opt(loss=surr_obj, target=self.policy, inputs=input_list)
         else:  # baseline method of just training initial policy
             self.optimizer.update_opt(loss=tf.reduce_mean(tf.pack(all_surr_objs[0],0)), target=self.policy, inputs=init_input_list)
+
+        f_kl = tensor_utils.compile_function(
+            inputs=input_list + old_dist_info_vars_list,
+            outputs=[mean_kl, max_kl],
+        )
+        self.opt_info = dict(
+            f_kl=f_kl,
+        )
 
         #f_kl = tensor_utils.compile_function(
         #    inputs=input_list + old_dist_info_vars_list,
@@ -157,10 +184,14 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
         logger.record_tabular("LossBefore", loss_before)
         logger.record_tabular("LossAfter", loss_after)
 
-        # TODO Commenting out for now since it is only used for logging
-        #mean_kl, max_kl = self.opt_info['f_kl'](*(list(inputs) + dist_info_list))
-        #logger.record_tabular('MeanKL', mean_kl)
-        #logger.record_tabular('MaxKL', max_kl)
+        dist_info_list = []
+        for i in range(self.meta_batch_size):
+            agent_infos = all_samples_data[-1][i]['agent_infos']
+            dist_info_list += [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
+        mean_kl, max_kl = self.opt_info['f_kl'](*(list(input_list) + dist_info_list))
+
+        logger.record_tabular('MeanKL', mean_kl)
+        logger.record_tabular('MaxKL', max_kl)
 
     @overrides
     def get_itr_snapshot(self, itr, samples_data):
