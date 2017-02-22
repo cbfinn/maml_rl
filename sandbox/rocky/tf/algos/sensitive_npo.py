@@ -6,6 +6,7 @@ from rllab.misc.overrides import overrides
 import rllab.misc.logger as logger
 from sandbox.rocky.tf.algos.batch_sensitive_polopt import BatchSensitivePolopt
 from sandbox.rocky.tf.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
+from sandbox.rocky.tf.optimizers.first_order_optimizer import FirstOrderOptimizer
 from sandbox.rocky.tf.misc import tensor_utils
 import tensorflow as tf
 
@@ -27,9 +28,16 @@ class SensitiveNPO(BatchSensitivePolopt):
             if optimizer_args is None:
                 optimizer_args = dict()
             optimizer = PenaltyLbfgsOptimizer(**optimizer_args)
+        if not use_sensitive:
+            default_args = dict(
+                batch_size=None,
+                max_epochs=1,
+            )
+            optimizer = FirstOrderOptimizer(**default_args)
         self.optimizer = optimizer
         self.step_size = step_size
         self.use_sensitive = use_sensitive
+        self.kl_constrain_step = -1  # needs to be 0 or -1 (original pol params, or new pol params)
         super(SensitiveNPO, self).__init__(**kwargs)
 
     def make_vars(self, stepnum='0'):
@@ -77,15 +85,20 @@ class SensitiveNPO(BatchSensitivePolopt):
 
             cur_params = new_params
             new_params = []
+            kls = []
 
             for i in range(self.meta_batch_size):
                 if j == 0:
-                    dist_info_vars, params = self.policy.dist_info_sym(obs_vars[i], state_info_vars)
+                    dist_info_vars, params = self.policy.dist_info_sym(obs_vars[i], state_info_vars, all_params=self.policy.all_params)
+                    if self.kl_constrain_step == 0:
+                        kl = dist.kl_sym(old_dist_info_vars[i], dist_info_vars)
+                        kls.append(kl)
                 else:
                     dist_info_vars, params = self.policy.updated_dist_info_sym(i, all_surr_objs[-1][i], obs_vars[i], params_dict=cur_params[i])
 
                 new_params.append(params)
                 logli = dist.log_likelihood_sym(action_vars[i], dist_info_vars)
+
 
                 # formulate as a minimization problem
                 # The gradient of the surrogate objective is the policy gradient
@@ -100,34 +113,42 @@ class SensitiveNPO(BatchSensitivePolopt):
             all_surr_objs.append(surr_objs)
 
 
-
-
-
         obs_vars, action_vars, adv_vars = self.make_vars('test')
         surr_objs = []
-        kls = []
         for i in range(self.meta_batch_size):
             dist_info_vars, _ = self.policy.updated_dist_info_sym(i, all_surr_objs[-1][i], obs_vars[i], params_dict=new_params[i])
 
 
-            kl = dist.kl_sym(old_dist_info_vars[i], dist_info_vars)
-            kls.append(kl)
+            if self.kl_constrain_step == -1:
+                kl = dist.kl_sym(old_dist_info_vars[i], dist_info_vars)
+                kls.append(kl)
             lr = dist.likelihood_ratio_sym(action_vars[i], old_dist_info_vars[i], dist_info_vars)
             surr_objs.append( - tf.reduce_mean(lr*adv_vars[i]))
 
-        surr_obj = tf.reduce_mean(tf.pack(surr_objs, 0))
-        mean_kl = tf.reduce_mean(tf.pack(kls, 0))
-        max_kl = tf.reduce_max(tf.pack(kls, 0))
+        if self.use_sensitive:
+            surr_obj = tf.reduce_mean(tf.pack(surr_objs, 0))
+            input_list += obs_vars + action_vars + adv_vars + old_dist_info_vars_list
+        else:
+            surr_obj = tf.reduce_mean(tf.pack(all_surr_objs[0], 0))
+            input_list = init_input_list
 
-        input_list += obs_vars + action_vars + adv_vars + old_dist_info_vars_list
+        if self.use_sensitive:
+            mean_kl = tf.reduce_mean(tf.concat(0, kls))
+            max_kl = tf.reduce_max(tf.concat(0, kls))
 
-        self.optimizer.update_opt(
-            loss=surr_obj,
-            target=self.policy,
-            leq_constraint=(mean_kl, self.step_size),
-            inputs=input_list,
-            constraint_name="mean_kl"
-        )
+            self.optimizer.update_opt(
+                loss=surr_obj,
+                target=self.policy,
+                leq_constraint=(mean_kl, self.step_size),
+                inputs=input_list,
+                constraint_name="mean_kl"
+            )
+        else:
+            self.optimizer.update_opt(
+                loss=surr_obj,
+                target=self.policy,
+                inputs=input_list,
+            )
         return dict()
 
     @overrides
@@ -155,26 +176,28 @@ class SensitiveNPO(BatchSensitivePolopt):
             if step == 0:
                 init_inputs = input_list
 
-        dist_info_list = []
-        for i in range(self.meta_batch_size):
-            agent_infos = all_samples_data[-1][i]['agent_infos']
-            dist_info_list += [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
+        if self.use_sensitive:
+            dist_info_list = []
+            for i in range(self.meta_batch_size):
+                agent_infos = all_samples_data[self.kl_constrain_step][i]['agent_infos']
+                dist_info_list += [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
+            input_list += tuple(dist_info_list)
+            logger.log("Computing KL before")
+            mean_kl_before = self.optimizer.constraint_val(input_list)
 
-        input_list += tuple(dist_info_list)
         logger.log("Computing loss before")
         loss_before = self.optimizer.loss(input_list)
-        logger.log("Computing KL before")
-        mean_kl_before = self.optimizer.constraint_val(input_list)
         logger.log("Optimizing")
         self.optimizer.optimize(input_list)
-        logger.log("Computing KL after")
-        mean_kl = self.optimizer.constraint_val(input_list)
         logger.log("Computing loss after")
         loss_after = self.optimizer.loss(input_list)
+        if self.use_sensitive:
+            logger.log("Computing KL after")
+            mean_kl = self.optimizer.constraint_val(input_list)
+            logger.record_tabular('MeanKLBefore', mean_kl_before)
+            logger.record_tabular('MeanKL', mean_kl)
         logger.record_tabular('LossBefore', loss_before)
         logger.record_tabular('LossAfter', loss_after)
-        logger.record_tabular('MeanKLBefore', mean_kl_before)
-        logger.record_tabular('MeanKL', mean_kl)
         logger.record_tabular('dLoss', loss_before - loss_after)
         return dict()
 

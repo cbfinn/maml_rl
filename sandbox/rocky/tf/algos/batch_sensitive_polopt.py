@@ -46,6 +46,7 @@ class BatchSensitivePolopt(RLAlgorithm):
             sampler_args=None,
             force_batch_sampler=False,
             use_sensitive=True,
+            load_policy=None,
             **kwargs
     ):
         """
@@ -73,6 +74,7 @@ class BatchSensitivePolopt(RLAlgorithm):
         """
         self.env = env
         self.policy = policy
+        self.load_policy=load_policy
         self.baseline = baseline
         self.scope = scope
         self.n_itr = n_itr
@@ -94,16 +96,16 @@ class BatchSensitivePolopt(RLAlgorithm):
         self.num_grad_updates = num_grad_updates
 
         if sampler_cls is None:
-            if self.policy.vectorized and not force_batch_sampler:
-                sampler_cls = VectorizedSampler
-            else:
-                raise NotImplementedError('need # of envs')
-                sampler_cls = BatchSampler
+            #if self.policy.vectorized and not force_batch_sampler:
+            sampler_cls = VectorizedSampler
+            #else:
+            #    raise NotImplementedError('need # of envs')
+            #    sampler_cls = BatchSampler
         if sampler_args is None:
             sampler_args = dict()
         sampler_args['n_envs'] = self.meta_batch_size
         self.sampler = sampler_cls(self, **sampler_args)
-        self.init_opt()
+        #self.init_opt()
 
     def start_worker(self):
         self.sampler.start_worker()
@@ -127,7 +129,20 @@ class BatchSensitivePolopt(RLAlgorithm):
         flatten_list = lambda l: [item for sublist in l for item in sublist]
 
         with tf.Session() as sess:
-            sess.run(tf.initialize_all_variables())
+            if self.load_policy is not None:
+                import joblib
+                self.policy = joblib.load(self.load_policy)['policy']
+            self.init_opt()
+            # initialize uninitialized vars
+            uninit_vars = []
+            for var in tf.all_variables():
+                try:
+                    sess.run(var)
+                except tf.errors.FailedPreconditionError:
+                    uninit_vars.append(var)
+            sess.run(tf.initialize_variables(uninit_vars))
+            #sess.run(tf.initialize_all_variables())
+
             self.start_worker()
             start_time = time.time()
             for itr in range(self.start_itr, self.n_itr):
@@ -137,8 +152,13 @@ class BatchSensitivePolopt(RLAlgorithm):
                     # point mass:
                     if self.env.observation_space.shape[0] <= 4:  # pointmass (oracle=4, normal=2)
                         learner_env_goals = np.zeros((self.meta_batch_size, 2, ))
-                        """
                         # 0d
+                        #goals = [np.array([-0.5,0]), np.array([0.5,0])]
+                        # 10 goals
+                        #goals = np.array([[-0.5,0], [0.5,0],[0.2,0.2],[-0.2,-0.2],[0.5,0.5],[0,0.5],[0,-0.5],[-0.5,-0.5],[0.5,-0.5],[-0.5,0.5]])
+                        #for i in range(self.meta_batch_size):
+                        #    learner_env_goals[i,:] = goals[np.random.randint(len(goals))]
+                        """
                         goals = [np.array([-0.5,0]), np.array([0.5,0])]
                         goals = [np.array([0.5,0.1]), np.array([0.5,-0.1])]
                         goals = [np.array([0.5,0.0]), np.array([-0.5,0.0]),
@@ -152,7 +172,7 @@ class BatchSensitivePolopt(RLAlgorithm):
                         # 2d
                         learner_env_goals = np.random.uniform(-0.5, 0.5, size=(self.meta_batch_size, 2, ))
                         #learner_env_goals[:, 1] = 0  # this makes it 1d
-                    elif self.env.observation_space.shape[0] >= 13:  # swimmer
+                    elif self.env.observation_space.shape[0] >= 10:  # swimmer or cheetah
                         #learner_env_goals = np.random.choice((0.1, 0.2), (self.meta_batch_size, ))
                         learner_env_goals = np.random.uniform(0.1, 0.2, (self.meta_batch_size, ))
                         #learner_env_goals = np.random.uniform(0.0, 0.2, (self.meta_batch_size, ))
@@ -207,11 +227,10 @@ class BatchSensitivePolopt(RLAlgorithm):
                     logger.record_tabular('Time', time.time() - start_time)
                     logger.record_tabular('ItrTime', time.time() - itr_start_time)
                     #if self.plot and itr % 2 == 0:
-                    """
                     if itr % 2 == 0 and self.env.observation_space.shape[0] <= 4: # point-mass
                         logger.log("Saving visualization of paths")
                         import matplotlib.pyplot as plt;
-                        for ind in range(5):
+                        for ind in range(min(5, self.meta_batch_size)):
                             plt.clf()
                             plt.plot(learner_env_goals[ind][0], learner_env_goals[ind][1], 'k*', markersize=10)
                             plt.hold(True)
@@ -239,7 +258,7 @@ class BatchSensitivePolopt(RLAlgorithm):
                             plt.ylim([-0.8, 0.8])
                             plt.legend(['goal', 'preupdate path', 'postupdate path'])
                             plt.savefig('/home/cfinn/prepost_path'+str(ind)+'.png')
-                    elif itr % 2 == 0:  # swimmer
+                    elif itr % 2 == 0:  # swimmer or cheetah
                         logger.log("Saving visualization of paths")
                         import matplotlib.pyplot as plt;
                         for ind in range(min(5, self.meta_batch_size)):
@@ -260,7 +279,6 @@ class BatchSensitivePolopt(RLAlgorithm):
 
                             plt.legend(['preupdate path', 'postupdate path'], loc=2)
                             plt.savefig('/home/cfinn/swim1d_prepost_itr'+str(itr)+'_id'+str(ind)+'.pdf')
-                    """
 
                     logger.dump_tabular(with_prefix=False)
                     #if self.plot:

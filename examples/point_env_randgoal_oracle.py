@@ -23,10 +23,12 @@ class PointEnvRandGoalOracle(Env):
             self._goal = goal
         elif self._goal is None:
         #else:
-            import pdb; pdb.set_trace()
+            #import pdb; pdb.set_trace()
             # Only set a new goal if this env hasn't had one defined before.
-            self._goal = np.random.uniform(0, 1, size=(2,))
-            self._goal[1] = 0
+            #goals = [np.array([-0.5,0]), np.array([0.5,0])]
+            #goals = np.array([[-0.5,0], [0.5,0],[0.2,0.2],[-0.2,-0.2],[0.5,0.5],[0,0.5],[0,-0.5],[-0.5,-0.5],[0.5,-0.5],[-0.5,0.5]])
+            #self._goal = goals[np.random.randint(10)]
+            self._goal = np.random.uniform(-0.5, 0.5, size=(2,))
 
         self._state = (0, 0)
         observation = np.copy(self._state)

@@ -219,7 +219,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
 
             super(SensitiveGaussianMLPPolicy, self).__init__(env_spec)
 
-            dist_info_sym, _ = self.dist_info_sym(self.input_tensor, dict(), is_training=False)
+            dist_info_sym = self.dist_info_sym(self.input_tensor, dict(), is_training=False)
             mean_var = dist_info_sym["mean"]
             log_std_var = dist_info_sym["log_std"]
 
@@ -344,7 +344,9 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         # mean_var - tensor for policy mean
         # std_param_var - tensor for policy std before output
         #mean_var, std_param_var = L.get_output([self._l_mean, self._l_std_param], obs_var)
+        return_params=True
         if all_params is None:
+            return_params=False
             all_params = self.all_params
 
         mean_var, std_param_var = self._forward(obs_var, all_params, is_training)
@@ -356,7 +358,10 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
             log_std_var = tf.log(tf.log(1. + tf.exp(std_param_var)))
         else:
             raise NotImplementedError
-        return dict(mean=mean_var, log_std=log_std_var), all_params
+        if return_params:
+            return dict(mean=mean_var, log_std=log_std_var), all_params
+        else:
+            return dict(mean=mean_var, log_std=log_std_var)
 
     def updated_dist_info_sym(self, task_id, surr_obj, new_obs_var, params_dict=None, is_training=True):
         """ symbolically create MAML graph, for the meta-optimization.
@@ -399,14 +404,13 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         # this function takes a numpy array observations and outputs randomly sampled actions.
         # Assumes that there is one observation per distr, if distr is a dict
         flat_obs = self.observation_space.flatten_n(observations)
-
         result = self._cur_f_dist(flat_obs)
 
-        if len(result) == 2:
+        if len(result) == 2:  # TODO - this assumes that there aren't 2 meta tasks
             means, log_stds = result
         else:
-            means = np.squeeze(np.array([res[0] for res in result]))
-            log_stds = np.squeeze(np.array([res[1] for res in result]))
+            means = np.array([res[0] for res in result])[:,0,:]
+            log_stds = np.array([res[1] for res in result])[:,0,:]
 
         rnd = np.random.normal(size=means.shape)
         actions = rnd * np.exp(log_stds) + means
@@ -516,7 +520,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         """
         # Not used
         import pdb; pdb.set_trace()
-        new_dist_info_vars, _ = self.dist_info_sym(obs_var, action_var)
+        new_dist_info_vars = self.dist_info_sym(obs_var, action_var)
         new_mean_var, new_log_std_var = new_dist_info_vars["mean"], new_dist_info_vars["log_std"]
         old_mean_var, old_log_std_var = old_dist_info_vars["mean"], old_dist_info_vars["log_std"]
         epsilon_var = (action_var - old_mean_var) / (tf.exp(old_log_std_var) + 1e-8)

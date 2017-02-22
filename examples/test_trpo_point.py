@@ -1,6 +1,6 @@
 
 from sandbox.rocky.tf.algos.trpo import TRPO
-from sandbox.rocky.tf.algos.vpg import VPG
+# from sandbox.rocky.tf.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from sandbox.rocky.tf.policies.minimal_gauss_mlp_policy import GaussianMLPPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
@@ -13,38 +13,42 @@ from rllab.misc.instrument import stub, run_experiment_lite
 
 stub(globals())
 
+
+#initial_params_file = 'data/local/trpo-sensitive-point/bignet_sens1_fbs20_mbs100_flr_1.0baseline_linear_step11_oracle0/params.pkl'
+#initial_params_file = 'data/local/trpo-sensitive-point/bignet_sens1_fbs20_mbs100_flr_1.0baseline_linear_step11_oracle0/params.pkl'
+initial_params_file = 'data/local/trpopoint2d/randenv/params.pkl'
+
+import joblib
 import tensorflow as tf
 
-env = normalize(PointEnvRandGoal())
-#env = normalize(PointEnvRandGoalOracle())
 
-#env = normalize(HalfCheetahEnv())
-#env = normalize(Walker2DEnv())
+env = normalize(PointEnvRandGoal(goal=(0.2,0.3)))
 env = TfEnv(env)
-policy = GaussianMLPPolicy(
-    name='policy',
-    env_spec=env.spec,
-    # The neural network policy should have two hidden layers, each with 32 hidden units.
-    #hidden_sizes=(32, 32)
-    #hidden_nonlinearity=tf.nn.relu,
-    hidden_sizes=(100, 100)
-)
+#policy = GaussianMLPPolicy(
+#    name='policy',
+#    env_spec=env.spec,
+#    # The neural network policy should have two hidden layers, each with 32 hidden units.
+#    #hidden_sizes=(32, 32)
+#    #hidden_nonlinearity=tf.nn.relu,
+#    hidden_sizes=(100, 100),
+#    init_params_file=initial_params_file,
+#)
 
 baseline = LinearFeatureBaseline(env_spec=env.spec)
 
-#algo = TRPO(
-algo = VPG(
+algo = TRPO(
     env=env,
-    policy=policy,
+    policy=None,
+    load_policy=initial_params_file,
     baseline=baseline,
-    batch_size=1000,  # was 4k  # 500 for path lenght of 5, 1000 for path length of 100
-    max_path_length=100,
-    n_itr=100,
+    batch_size=100,  # was 4k
+    max_path_length=5,
+    n_itr=5,
     discount=0.99,
-    #step_size=0.01,
+    step_size=0.01,
     #plot=True,
 )
-#algo.train()
+
 
 run_experiment_lite(
     algo.train(),
@@ -54,8 +58,8 @@ run_experiment_lite(
     snapshot_mode="last",
     # Specifies the seed for the experiment. If this is not provided, a random seed
     # will be used
-    seed=1,
-    exp_prefix='vpg_sensitive_point100',
-    exp_name='vpgrandenv',
+    seed=2,
+    exp_prefix='trpopoint2d_test',
+    #exp_name='env',
     #plot=True,
 )

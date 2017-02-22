@@ -7,6 +7,7 @@ from rllab.baselines.zero_baseline import ZeroBaseline
 from rllab.envs.mujoco.swimmer_env import SwimmerEnv
 from rllab.envs.mujoco.swimmer_randgoal_env import SwimmerRandGoalEnv
 from rllab.envs.mujoco.swimmer_randgoal_oracle_env import SwimmerRandGoalOracleEnv
+from rllab.envs.mujoco.half_cheetah_env_rand import HalfCheetahEnvRand
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import stub, run_experiment_lite
 #from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
@@ -19,11 +20,11 @@ import tensorflow as tf
 
 # 1e-3 for sensitive, 1e-2 for oracle, non-sensitive
 learning_rates = [1e-3]  # 1e-3 works well for 1 step, trying lower for 2 step, trying 1e-2 for large batch
-fast_learning_rates = [0.1]  # 0.5 works for [0.1, 0.2], too high for 2 step
+fast_learning_rates = [1.0]  # 0.5 works for [0.1, 0.2], too high for 2 step
 baselines = ['linear']
 fast_batch_size = 20  # 10 works for [0.1, 0.2], 20 doesn't improve much for [0,0.2]
 meta_batch_size = 20  # 10 also works, but much less stable, 20 is fairly stable, 40 is more stable
-max_path_length = 100
+max_path_length = 500
 num_grad_updates = 1
 use_sensitive = True
 
@@ -32,8 +33,7 @@ for fast_learning_rate in fast_learning_rates:
         for bas in baselines:
             stub(globals())
 
-            #env = TfEnv(normalize(SwimmerEnv()))
-            env = TfEnv(normalize(SwimmerRandGoalEnv()))
+            env = TfEnv(normalize(HalfCheetahEnvRand()))
             policy = SensitiveGaussianMLPPolicy(
                 name="policy",
                 env_spec=env.spec,
@@ -70,7 +70,7 @@ for fast_learning_rate in fast_learning_rates:
                 #exp_name='deleteme'
                 #exp_prefix='sensitive1dT5_2017_01_19',
                 #exp_prefix='bugfix_sensitive0d_8tasks_T'+str(max_path_length)+'_2017_02_05',
-                exp_prefix='trpo_sensitive_swimmer' + str(max_path_length),
+                exp_prefix='trpo_sensitive_cheetah' + str(max_path_length),
                 exp_name='sens'+str(int(use_sensitive))+'_fbs'+str(fast_batch_size)+'_mbs'+str(meta_batch_size)+'_flr_' + str(fast_learning_rate) + '_lr_' + str(learning_rate) + '_step1'+str(num_grad_updates),
                 plot=False,
             )

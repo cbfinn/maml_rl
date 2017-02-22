@@ -89,7 +89,7 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
 
             for i in range(self.meta_batch_size):
                 if j == 0:
-                    dist_info_vars, params = self.policy.dist_info_sym(obs_vars[i], state_info_vars)
+                    dist_info_vars, params = self.policy.dist_info_sym(obs_vars[i], state_info_vars, all_params=self.policy.all_params)
                 else:
                     dist_info_vars, params = self.policy.updated_dist_info_sym(i, all_surr_objs[-1][i], obs_vars[i], params_dict=cur_params[i])
 
@@ -120,8 +120,8 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
             kls.append(dist.kl_sym(old_dist_info_vars[i], dist_info_vars))
 
         surr_obj = tf.reduce_mean(tf.pack(surr_objs, 0))
-        mean_kl = tf.reduce_mean(tf.pack(kls, 0))
-        max_kl = tf.reduce_max(tf.pack(kls, 0))
+        mean_kl = tf.reduce_mean(tf.concat(0, kls))
+        max_kl = tf.reduce_max(tf.concat(0, kls))
         input_list += obs_vars + action_vars + adv_vars
 
         # TODO - make this not hacky if it does something decent
@@ -188,10 +188,10 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
         for i in range(self.meta_batch_size):
             agent_infos = all_samples_data[-1][i]['agent_infos']
             dist_info_list += [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
-        mean_kl, max_kl = self.opt_info['f_kl'](*(list(input_list) + dist_info_list))
-
-        logger.record_tabular('MeanKL', mean_kl)
-        logger.record_tabular('MaxKL', max_kl)
+        if self.use_sensitive:
+            mean_kl, max_kl = self.opt_info['f_kl'](*(list(input_list) + dist_info_list))
+            logger.record_tabular('MeanKL', mean_kl)
+            logger.record_tabular('MaxKL', max_kl)
 
     @overrides
     def get_itr_snapshot(self, itr, samples_data):

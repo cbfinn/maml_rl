@@ -1,6 +1,5 @@
 
 from sandbox.rocky.tf.algos.trpo import TRPO
-from sandbox.rocky.tf.algos.vpg import VPG
 from sandbox.rocky.tf.policies.minimal_gauss_mlp_policy import GaussianMLPPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
@@ -15,9 +14,8 @@ stub(globals())
 
 import tensorflow as tf
 
-env = normalize(PointEnvRandGoal())
-#env = normalize(PointEnvRandGoalOracle())
-
+#env = normalize(PointEnvRandGoal())
+env = normalize(PointEnvRandGoalOracle())
 #env = normalize(HalfCheetahEnv())
 #env = normalize(Walker2DEnv())
 env = TfEnv(env)
@@ -32,16 +30,15 @@ policy = GaussianMLPPolicy(
 
 baseline = LinearFeatureBaseline(env_spec=env.spec)
 
-#algo = TRPO(
-algo = VPG(
+algo = TRPO(
     env=env,
     policy=policy,
     baseline=baseline,
-    batch_size=1000,  # was 4k  # 500 for path lenght of 5, 1000 for path length of 100
-    max_path_length=100,
+    batch_size=500,  # was 4k
+    max_path_length=5,
     n_itr=100,
     discount=0.99,
-    #step_size=0.01,
+    step_size=0.01,
     #plot=True,
 )
 #algo.train()
@@ -55,7 +52,7 @@ run_experiment_lite(
     # Specifies the seed for the experiment. If this is not provided, a random seed
     # will be used
     seed=1,
-    exp_prefix='vpg_sensitive_point100',
-    exp_name='vpgrandenv',
+    exp_prefix='vpg_sensitive_point',
+    exp_name='oracleenv',
     #plot=True,
 )

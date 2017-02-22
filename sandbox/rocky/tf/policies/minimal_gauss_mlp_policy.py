@@ -199,31 +199,31 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
                 )
                 self._forward_std = lambda x: forward_param_layer(x, self.std_params)
 
-            self.std_parametrization = std_parametrization
+        self.std_parametrization = std_parametrization
 
-            if std_parametrization == 'exp':
-                min_std_param = np.log(min_std)
-            elif std_parametrization == 'softplus':
-                min_std_param = np.log(np.exp(min_std) - 1)
-            else:
-                raise NotImplementedError
+        if std_parametrization == 'exp':
+            min_std_param = np.log(min_std)
+        elif std_parametrization == 'softplus':
+            min_std_param = np.log(np.exp(min_std) - 1)
+        else:
+            raise NotImplementedError
 
-            self.min_std_param = min_std_param
+        self.min_std_param = min_std_param
 
-            self._dist = DiagonalGaussian(action_dim)
+        self._dist = DiagonalGaussian(action_dim)
 
-            self._cached_params = {}
+        self._cached_params = {}
 
-            super(GaussianMLPPolicy, self).__init__(env_spec)
+        super(GaussianMLPPolicy, self).__init__(env_spec)
 
-            dist_info_sym = self.dist_info_sym(input_tensor, dict(), is_training=False)
-            mean_var = dist_info_sym["mean"]
-            log_std_var = dist_info_sym["log_std"]
+        dist_info_sym = self.dist_info_sym(input_tensor, dict(), is_training=False)
+        mean_var = dist_info_sym["mean"]
+        log_std_var = dist_info_sym["log_std"]
 
-            self._f_dist = tensor_utils.compile_function(  # this probably also works...
-                inputs=[input_tensor],
-                outputs=[mean_var, log_std_var],
-            )
+        self._f_dist = tensor_utils.compile_function(  # this probably also works...
+            inputs=[input_tensor],
+            outputs=[mean_var, log_std_var],
+        )
 
     @property
     def vectorized(self):
@@ -434,5 +434,4 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
         if load_params:
             tf.get_default_session().run(tf.initialize_variables(self.get_params()))
             self.set_param_values(d["params"])
-
 

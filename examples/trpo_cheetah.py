@@ -12,7 +12,8 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.mujoco.swimmer_env import SwimmerEnv
 from rllab.envs.mujoco.swimmer_randgoal_oracle_env import SwimmerRandGoalOracleEnv
 from rllab.envs.mujoco.swimmer_randgoal_env import SwimmerRandGoalEnv
-#from rllab.envs.mujoco.half_cheetah_env import HalfCheetahEnv
+from rllab.envs.mujoco.half_cheetah_env import HalfCheetahEnv
+from rllab.envs.mujoco.half_cheetah_env_oracle import HalfCheetahEnvOracle
 from rllab.envs.mujoco.walker2d_env import Walker2DEnv
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import stub, run_experiment_lite
@@ -21,11 +22,13 @@ stub(globals())
 
 
 #env = normalize(SwimmerEnv())
-env = normalize(SwimmerRandGoalOracleEnv())
+#env = normalize(SwimmerRandGoalOracleEnv())
 #env = normalize(SwimmerRandGoalEnv())
 
-max_path_length = 100
+max_path_length = 500
 #env = normalize(HalfCheetahEnv())
+env = normalize(HalfCheetahEnvOracle())
+
 #env = normalize(Walker2DEnv())
 if use_tf:
     env = TfEnv(env)
@@ -68,7 +71,7 @@ run_experiment_lite(
     # Specifies the seed for the experiment. If this is not provided, a random seed
     # will be used
     seed=1,
-    exp_prefix='trpo_sensitive_swimmer' + str(max_path_length),
-    exp_name='oracleenv',
+    exp_prefix='trpo_sensitive_cheetah' + str(max_path_length),
+    exp_name='oracledirec_env',
     #plot=True,
 )

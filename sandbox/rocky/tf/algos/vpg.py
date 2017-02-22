@@ -93,6 +93,7 @@ class VPG(BatchPolopt, Serializable):
         if is_recurrent:
             input_list.append(valid_var)
 
+        #self.policy.set_init_surr_obj(input_list, [surr_obj])  # debugging
         self.optimizer.update_opt(loss=surr_obj, target=self.policy, inputs=input_list)
 
         f_kl = tensor_utils.compile_function(

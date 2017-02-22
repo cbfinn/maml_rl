@@ -22,7 +22,7 @@ class VG(VariantGenerator):
 
     @variant
     def seed(self):
-        return [1] #, 11, 21, 31, 41]
+        return [2,3] #, 11, 21, 31, 41]
 
 variants = VG().variants()
 
