@@ -39,24 +39,23 @@ initial_params_file = 'data/local/trpo-sensitive-point10goal/randenv/params.pkl'
 initial_params_file1 = 'data/local/vpg-sensitive-point100/trposens1_fbs20_mbs20_flr_0.5metalr_0.01_step11/params.pkl'
 initial_params_file2 = 'data/local/vpg-sensitive-point100/vpgrandenv/params.pkl'
 initial_params_file3 = 'data/local/vpg-sensitive-point100/sens0_fbs20_mbs20_flr_1.0metalr_0.01_step11/params.pkl'
-initial_params_files = [initial_params_file1, initial_params_file2, initial_params_file3]
+initial_params_file4 = 'data/local/vpg-sensitive-point100/oracleenv/params.pkl'
+#initial_params_files = [initial_params_file1, initial_params_file3, initial_params_file4]
 
 # the 10 goals
 #goals = [[-0.5,0], [0.5,0],[0.2,0.2],[-0.2,-0.2],[0.5,0.5],[0,0.5],[0,-0.5],[-0.5,-0.5],[0.5,-0.5],[-0.5,0.5]]
 
-test_num_goals = 10
+test_num_goals = 30
 np.random.seed(1)
 goals = np.random.uniform(-0.5, 0.5, size=(test_num_goals, 2, ))
 print goals
 
 #step_sizes = [0.5, 1.0, 1.0]
+#initial_params_files = [initial_params_file1]
 
 
-initial_params_files = [initial_params_file1]
-step_sizes = [0.5]
-
-
-#initial_params_files = [initial_params_file1, initial_params_file2, ]
+step_sizes = [0.5, 0.5, 0.5]
+initial_params_files = [initial_params_file1, initial_params_file3, None]
 
 all_avg_returns = []
 for step_i, initial_params_file in zip(range(len(step_sizes)), initial_params_files):
@@ -64,7 +63,11 @@ for step_i, initial_params_file in zip(range(len(step_sizes)), initial_params_fi
     for goal in goals:
         goal = list(goal)
 
-        if sens:
+
+        if initial_params_file is not None and 'oracle' in initial_params_file:
+            env = normalize(PointEnvRandGoalOracle(goal=goal))
+            n_itr = 1
+        elif sens:
             env = normalize(PointEnvRandGoal(goal=goal))
             n_itr = 1
             #env = normalize(PointEnvRandGoal())
@@ -82,11 +85,15 @@ for step_i, initial_params_file in zip(range(len(step_sizes)), initial_params_fi
             hidden_sizes=(100, 100),
         )
 
+
+        if initial_params_file is not None:
+            policy = None
+
         baseline = LinearFeatureBaseline(env_spec=env.spec)
         if sens:
             algo = SensitiveVPG(
                 env=env,
-                policy=None,
+                policy=policy,
                 load_policy=initial_params_file,
                 baseline=baseline,
                 batch_size=20, #100,  # was 4k
@@ -100,7 +107,7 @@ for step_i, initial_params_file in zip(range(len(step_sizes)), initial_params_fi
         else:
             algo = VPG(
                 env=env,
-                policy=None,
+                policy=policy,
                 load_policy=initial_params_file,
                 baseline=baseline,
                 batch_size=4000,  # 2x

@@ -5,9 +5,9 @@ import numpy as np
 
 
 class PointEnvRandGoalOracle(Env):
-    def __init__(self):
+    def __init__(self, goal=None):
         # TODO - call super class init?
-        self._goal = None
+        self._goal = goal
 
     @property
     def observation_space(self):
