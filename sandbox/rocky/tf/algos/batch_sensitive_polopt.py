@@ -104,6 +104,7 @@ class BatchSensitivePolopt(RLAlgorithm):
         if sampler_args is None:
             sampler_args = dict()
         sampler_args['n_envs'] = self.meta_batch_size
+        #sampler_args['n_envs'] = batch_size*self.meta_batch_size  # fast batch size
         self.sampler = sampler_cls(self, **sampler_args)
         #self.init_opt()
 
@@ -143,6 +144,7 @@ class BatchSensitivePolopt(RLAlgorithm):
             sess.run(tf.initialize_variables(uninit_vars))
             #sess.run(tf.initialize_all_variables())
 
+
             self.start_worker()
             start_time = time.time()
             for itr in range(self.start_itr, self.n_itr):
@@ -174,8 +176,8 @@ class BatchSensitivePolopt(RLAlgorithm):
                         #learner_env_goals[:, 1] = 0  # this makes it 1d
                     elif self.env.observation_space.shape[0] >= 10:  # swimmer or cheetah
                         #learner_env_goals = np.random.choice((0.1, 0.2), (self.meta_batch_size, ))
-                        learner_env_goals = np.random.uniform(0.1, 0.2, (self.meta_batch_size, ))
-                        #learner_env_goals = np.random.uniform(0.0, 0.2, (self.meta_batch_size, ))
+                        #learner_env_goals = np.random.uniform(0.1, 0.2, (self.meta_batch_size, ))
+                        learner_env_goals = np.random.uniform(0.1, 0.8, (self.meta_batch_size, ))
                     else:
                         raise NotImplementedError('unrecognized env')
 
@@ -227,6 +229,7 @@ class BatchSensitivePolopt(RLAlgorithm):
                     logger.record_tabular('Time', time.time() - start_time)
                     logger.record_tabular('ItrTime', time.time() - itr_start_time)
                     #if self.plot and itr % 2 == 0:
+                    """
                     if itr % 2 == 0 and self.env.observation_space.shape[0] <= 4: # point-mass
                         logger.log("Saving visualization of paths")
                         import matplotlib.pyplot as plt;
@@ -279,6 +282,7 @@ class BatchSensitivePolopt(RLAlgorithm):
 
                             plt.legend(['preupdate path', 'postupdate path'], loc=2)
                             plt.savefig('/home/cfinn/swim1d_prepost_itr'+str(itr)+'_id'+str(ind)+'.pdf')
+                    """
 
                     logger.dump_tabular(with_prefix=False)
                     #if self.plot:

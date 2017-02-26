@@ -14,6 +14,7 @@ from rllab.envs.mujoco.swimmer_randgoal_oracle_env import SwimmerRandGoalOracleE
 from rllab.envs.mujoco.swimmer_randgoal_env import SwimmerRandGoalEnv
 from rllab.envs.mujoco.half_cheetah_env import HalfCheetahEnv
 from rllab.envs.mujoco.half_cheetah_env_oracle import HalfCheetahEnvOracle
+from rllab.envs.mujoco.half_cheetah_env_direc_oracle import HalfCheetahEnvDirecOracle
 from rllab.envs.mujoco.walker2d_env import Walker2DEnv
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import stub, run_experiment_lite
@@ -27,7 +28,7 @@ stub(globals())
 
 max_path_length = 500
 #env = normalize(HalfCheetahEnv())
-env = normalize(HalfCheetahEnvOracle())
+env = normalize(HalfCheetahEnvDirecOracle())
 
 #env = normalize(Walker2DEnv())
 if use_tf:
@@ -71,7 +72,8 @@ run_experiment_lite(
     # Specifies the seed for the experiment. If this is not provided, a random seed
     # will be used
     seed=1,
-    exp_prefix='trpo_sensitive_cheetah' + str(max_path_length),
+    exp_prefix='deleteme',
+    #exp_prefix='trpo_sensitive_cheetah' + str(max_path_length),
     exp_name='oracledirec_env',
     #plot=True,
 )

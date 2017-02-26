@@ -13,7 +13,9 @@ class VecEnvExecutor(object):
         self.ts = np.zeros(len(self.envs), dtype='int')
         self.max_path_length = max_path_length
 
-    def step(self, action_n):
+    def step(self, action_n, reset_args=None):
+        if reset_args is None:
+            reset_args = [None]*len(self.envs)
         all_results = [env.step(a) for (a, env) in zip(action_n, self.envs)]
         obs, rewards, dones, env_infos = list(map(list, list(zip(*all_results))))
         dones = np.asarray(dones)
@@ -23,7 +25,7 @@ class VecEnvExecutor(object):
             dones[self.ts >= self.max_path_length] = True
         for (i, done) in enumerate(dones):
             if done:
-                obs[i] = self.envs[i].reset()
+                obs[i] = self.envs[i].reset(reset_args[i])
                 self.ts[i] = 0
         return obs, rewards, dones, tensor_utils.stack_tensor_dict_list(env_infos)
 

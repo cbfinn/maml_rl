@@ -34,7 +34,7 @@ class SwimmerRandGoalEnv(MujocoEnv, Serializable):
         goal_vel = reset_args
         if goal_vel is not None:
             self._goal_vel = goal_vel
-        else:
+        elif self._goal is None:
             self._goal_vel = np.random.uniform(0.1, 0.2)
         self.reset_mujoco(init_state)
         self.model.forward()

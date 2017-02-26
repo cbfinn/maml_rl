@@ -17,12 +17,16 @@ class HalfCheetahEnvOracle(MujocoEnv, Serializable):
 
     def __init__(self, *args, **kwargs):
         super(HalfCheetahEnvOracle, self).__init__(*args, **kwargs)
+        self._goal_vel = None
         Serializable.__init__(self, *args, **kwargs)
 
     @overrides
     def reset(self, init_state=None, reset_args=None, **kwargs):
-        direcs = [-1,1]
-        self.goal_direction = np.random.choice(direcs)
+        goal_vel = reset_args
+        if goal_vel is not None:
+            self._goal_vel = goal_vel
+        else:
+            self._goal_vel = np.random.uniform(0.1, 0.8)
         self.reset_mujoco(init_state)
         self.model.forward()
         self.current_com = self.model.data.com_subtree[0]
@@ -36,7 +40,7 @@ class HalfCheetahEnvOracle(MujocoEnv, Serializable):
             self.model.data.qvel.flat,
             self.get_body_com("torso").flat,
         ])
-        return np.r_[obs, np.array([self.goal_direction])]
+        return np.r_[obs, np.array([self._goal_vel])]
 
     def get_body_xmat(self, body_name):
         idx = self.model.body_names.index(body_name)
@@ -51,8 +55,7 @@ class HalfCheetahEnvOracle(MujocoEnv, Serializable):
         next_obs = self.get_current_obs()
         action = np.clip(action, *self.action_bounds)
         ctrl_cost = 1e-1 * 0.5 * np.sum(np.square(action))
-        run_cost = self.goal_direction * -1 * self.get_body_comvel("torso")[0]
-        #run_cost = 2.*np.abs(self.get_body_comvel("torso")[0] - 0.1)
+        run_cost = 1.*np.abs(self.get_body_comvel("torso")[0] - self._goal_vel)
         cost = ctrl_cost + run_cost
         reward = -cost
         done = False

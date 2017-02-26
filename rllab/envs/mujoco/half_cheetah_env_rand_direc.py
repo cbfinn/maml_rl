@@ -1,5 +1,6 @@
 import numpy as np
 
+from rllab.misc import autoargs
 from rllab.core.serializable import Serializable
 from rllab.envs.base import Step
 from rllab.envs.mujoco.mujoco_env import MujocoEnv
@@ -15,19 +16,25 @@ class HalfCheetahEnvRandDirec(MujocoEnv, Serializable):
 
     FILE = 'half_cheetah.xml'
 
-    def __init__(self, *args, **kwargs):
+    @autoargs.arg('goal_vel', type=float,
+                  help='self-explanatory '
+                       '')
+    def __init__(self, goal_vel=None, *args, **kwargs):
+        self.goal_vel = goal_vel
         super(HalfCheetahEnvRandDirec, self).__init__(*args, **kwargs)
-        self._goal_vel = None
+        self.goal_vel = goal_vel
         Serializable.__init__(self, *args, **kwargs)
+        self.goal_vel = goal_vel
+        self.reset(reset_args=goal_vel)
 
     @overrides
     def reset(self, init_state=None, reset_args=None, **kwargs):
         goal_vel = reset_args
         if goal_vel is not None:
-            self._goal_vel = goal_vel
-        else:
-            self._goal_vel = np.random.uniform(0.1, 0.2)
-        self.goal_direction = -1.0 if self._goal_vel < 0.15 else 1.0
+            self.goal_vel = goal_vel
+        elif self.goal_vel is None:
+            self.goal_vel = np.random.uniform(0.1, 0.8)
+        self.goal_direction = -1.0 if self.goal_vel < 0.4 else 1.0
         self.reset_mujoco(init_state)
         self.model.forward()
         self.current_com = self.model.data.com_subtree[0]

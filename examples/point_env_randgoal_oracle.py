@@ -8,6 +8,10 @@ class PointEnvRandGoalOracle(Env):
     def __init__(self, goal=None):
         # TODO - call super class init?
         self._goal = goal
+        if goal is None:
+            self.set_at_init = False
+        else:
+            self.set_at_init = True
 
     @property
     def observation_space(self):
@@ -21,13 +25,7 @@ class PointEnvRandGoalOracle(Env):
         goal = reset_args
         if goal is not None:
             self._goal = goal
-        elif self._goal is None:
-        #else:
-            #import pdb; pdb.set_trace()
-            # Only set a new goal if this env hasn't had one defined before.
-            #goals = [np.array([-0.5,0]), np.array([0.5,0])]
-            #goals = np.array([[-0.5,0], [0.5,0],[0.2,0.2],[-0.2,-0.2],[0.5,0.5],[0,0.5],[0,-0.5],[-0.5,-0.5],[0.5,-0.5],[-0.5,0.5]])
-            #self._goal = goals[np.random.randint(10)]
+        elif not self.set_at_init:
             self._goal = np.random.uniform(-0.5, 0.5, size=(2,))
 
         self._state = (0, 0)

@@ -15,8 +15,8 @@ stub(globals())
 
 import tensorflow as tf
 
-env = normalize(PointEnvRandGoal())
-#env = normalize(PointEnvRandGoalOracle())
+#env = normalize(PointEnvRandGoal())
+env = normalize(PointEnvRandGoalOracle())
 
 #env = normalize(HalfCheetahEnv())
 #env = normalize(Walker2DEnv())
@@ -26,14 +26,14 @@ policy = GaussianMLPPolicy(
     env_spec=env.spec,
     # The neural network policy should have two hidden layers, each with 32 hidden units.
     #hidden_sizes=(32, 32)
-    #hidden_nonlinearity=tf.nn.relu,
+    hidden_nonlinearity=tf.nn.relu,
     hidden_sizes=(100, 100)
 )
 
 baseline = LinearFeatureBaseline(env_spec=env.spec)
 
-#algo = TRPO(
-algo = VPG(
+algo = TRPO(
+#algo = VPG(
     env=env,
     policy=policy,
     baseline=baseline,
@@ -41,7 +41,7 @@ algo = VPG(
     max_path_length=100,
     n_itr=100,
     discount=0.99,
-    #step_size=0.01,
+    step_size=0.01,
     #plot=True,
 )
 #algo.train()
@@ -56,6 +56,6 @@ run_experiment_lite(
     # will be used
     seed=1,
     exp_prefix='vpg_sensitive_point100',
-    exp_name='vpgrandenv',
+    exp_name='oracleenv2',
     #plot=True,
 )

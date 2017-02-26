@@ -368,8 +368,7 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
         :return:
         """
         # Not used
-        print '--this really shouldnt be used--'
-        import pdb; pdb.set_trace()
+        print('--this really shouldnt be used--')
         new_dist_info_vars = self.dist_info_sym(obs_var, action_var)
         new_mean_var, new_log_std_var = new_dist_info_vars["mean"], new_dist_info_vars["log_std"]
         old_mean_var, old_log_std_var = old_dist_info_vars["mean"], old_dist_info_vars["log_std"]

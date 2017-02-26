@@ -320,7 +320,7 @@ def query_yes_no(question, default="yes"):
 
     while True:
         sys.stdout.write(question + prompt)
-        choice = raw_input().lower()
+        choice = input().lower()
         if default is not None and choice == '':
             return valid[default]
         elif choice in valid:
@@ -697,7 +697,7 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
         aws_config = dict()
     aws_config = dict(default_config, **aws_config)
 
-    from StringIO import StringIO  # python 2
+    from io import StringIO  # python 2
     sio = StringIO()
     sio.write("#!/bin/bash\n")
     sio.write("{\n")

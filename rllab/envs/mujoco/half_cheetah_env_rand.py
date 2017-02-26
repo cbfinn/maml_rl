@@ -15,9 +15,9 @@ class HalfCheetahEnvRand(MujocoEnv, Serializable):
 
     FILE = 'half_cheetah.xml'
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, goal=None, *args, **kwargs):
+        self._goal_vel = goal
         super(HalfCheetahEnvRand, self).__init__(*args, **kwargs)
-        self._goal_vel = None
         Serializable.__init__(self, *args, **kwargs)
 
     @overrides
@@ -25,8 +25,8 @@ class HalfCheetahEnvRand(MujocoEnv, Serializable):
         goal_vel = reset_args
         if goal_vel is not None:
             self._goal_vel = goal_vel
-        else:
-            self._goal_vel = np.random.uniform(0.1, 0.2)
+        elif self._goal_vel is None:
+            self._goal_vel = np.random.uniform(0.1, 0.8)
         self.reset_mujoco(init_state)
         self.model.forward()
         self.current_com = self.model.data.com_subtree[0]

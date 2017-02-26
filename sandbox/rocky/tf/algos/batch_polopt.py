@@ -37,6 +37,7 @@ class BatchPolopt(RLAlgorithm):
             sampler_args=None,
             force_batch_sampler=False,
             load_policy=None,
+            reset_arg=None,
             **kwargs
     ):
         """
@@ -86,6 +87,7 @@ class BatchPolopt(RLAlgorithm):
         if sampler_args is None:
             sampler_args = dict()
         self.sampler = sampler_cls(self, **sampler_args)
+        self.reset_arg = reset_arg
 
     def start_worker(self):
         self.sampler.start_worker()
@@ -96,7 +98,7 @@ class BatchPolopt(RLAlgorithm):
         self.sampler.shutdown_worker()
 
     def obtain_samples(self, itr):
-        return self.sampler.obtain_samples(itr)
+        return self.sampler.obtain_samples(itr, reset_args=self.reset_arg)
 
     def process_samples(self, itr, paths):
         return self.sampler.process_samples(itr, paths)
@@ -141,7 +143,12 @@ class BatchPolopt(RLAlgorithm):
                     logger.record_tabular('Time', time.time() - start_time)
                     logger.record_tabular('ItrTime', time.time() - itr_start_time)
 
+                    import pickle
+                    with open('paths_itr'+str(itr)+'.pkl', 'wb') as f:
+                        pickle.dump(paths, f)
+
                     # debugging
+                    """
                     if itr % 1 == 0:
                         logger.log("Saving visualization of paths")
                         import matplotlib.pyplot as plt;
@@ -153,6 +160,7 @@ class BatchPolopt(RLAlgorithm):
                             plt.ylim([-1.0, 1.0])
                             plt.legend(['path'])
                             plt.savefig('/home/cfinn/path'+str(ind)+'.png')
+                    """
                     # end debugging
 
                     logger.dump_tabular(with_prefix=False)

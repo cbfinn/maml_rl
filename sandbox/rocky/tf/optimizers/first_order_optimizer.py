@@ -131,19 +131,20 @@ class FirstOrderOptimizer(Serializable):
 
             for batch in dataset.iterate(update=True):
                 # debugging
-                #param_vals = self.debug_target.get_param_values()
-                #grads = tf.gradients(self.debug_loss, self.debug_vars)
-                #grad_vals = sess.run(grads, dict(list(zip(self._input_vars, batch))))
-                #import numpy as np
-                #test = [np.reshape(g, [-1]) for g in grad_vals]
-                #grad_vals = np.concatenate(test, 0)
-                #new_param_vals = param_vals - self.learning_rate*grad_vals
-                #self.debug_target.set_param_values(new_param_vals)
-                if self._init_train_op is not None:
-                    sess.run(self._init_train_op, dict(list(zip(self._input_vars, batch))))
-                    self._init_train_op = None  # only use it once
-                else:
-                    sess.run(self._train_op, dict(list(zip(self._input_vars, batch))))
+                param_vals = self.debug_target.get_param_values()
+                grads = tf.gradients(self.debug_loss, self.debug_vars)
+                grad_vals = sess.run(grads, dict(list(zip(self._input_vars, batch))))
+                import numpy as np
+                test = [np.reshape(g, [-1]) for g in grad_vals]
+                grad_vals = np.concatenate(test, 0)
+                new_param_vals = param_vals - self.learning_rate*grad_vals
+                #import pdb; pdb.set_trace()
+                self.debug_target.set_param_values(new_param_vals)
+                #if self._init_train_op is not None:
+                #    sess.run(self._init_train_op, dict(list(zip(self._input_vars, batch))))
+                #    self._init_train_op = None  # only use it once
+                #else:
+                #    sess.run(self._train_op, dict(list(zip(self._input_vars, batch))))
 
                 #new_param_vals2 = self.debug_target.get_param_values()
                 #import pdb; pdb.set_trace()
