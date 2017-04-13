@@ -23,42 +23,23 @@ from rllab.misc.instrument import VariantGenerator, variant
 
 class VG(VariantGenerator):
 
-    #@variant
-    #def fast_lr(self):
-    #    return [0.01, 0.1, 1.0] #[0.01, 0.05, 0.1]  # would like to try 0.01, 0.05, 0.1, 0.2
-
-    #@variant
-    #def meta_step_size(self):
-    #    return [0.01, 0.02] #[0.01, 0.02] #, 0.05, 0.1]
-
-    #@variant
-    #def fast_batch_size(self):
-    #    return [20,40,80]  # 10, 20, 40
-
-    #@variant
-    #def meta_batch_size(self):
-    #    return [20, 40] # try 20, 40
-
     @variant
     def seed(self):
         return [1]
 
     @variant
     def oracle(self):
-        return [True]
+        # oracle or baseline
+        return [False]
 
     @variant
     def direc(self):
-        return [True]
+        return [False]
 
 # should also code up alternative KL thing
 
 variants = VG().variants()
 
-#fast_learning_rates = [0.1]  # 0.5 works for [0.1, 0.2], too high for 2 step
-#fast_batch_size = 10  # 10 works for [0.1, 0.2], 20 doesn't improve much for [0,0.2]
-#meta_batch_size = 20  # 10 also works, but much less stable, 20 is fairly stable, 40 is more stable
-#meta_step_size = 0.01  # trpo constraint step size
 max_path_length = 200
 num_grad_updates = 1
 use_sensitive = True
@@ -91,10 +72,9 @@ for v in variants:
         baseline=baseline,
         batch_size=max_path_length*100, # number of trajs for grad update
         max_path_length=max_path_length,
-        n_itr=1000,
+        n_itr=2000,
         use_sensitive=use_sensitive,
         step_size=0.01,
-        #optimizer_args={'tf_optimizer_args':{'learning_rate': learning_rate}},
         plot=False,
     )
 
@@ -105,7 +85,7 @@ for v in variants:
     if direc:
         exp_prefix = 'bugfix_trpo_sensitive_antdirec' + str(max_path_length)
     else:
-        exp_prefix = 'happy1bugfix_trpo_sensitive_ant' + str(max_path_length)
+        exp_prefix = 'posticml_trpo_sensitive_ant' + str(max_path_length)
 
     run_experiment_lite(
         algo.train(),
