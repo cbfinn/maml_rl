@@ -39,7 +39,7 @@ with open(random_pkl, 'rb') as f:
 legend=False
 sns.tsplot(time=range(n_itr), data=maml_data[:,:n_itr], color='g', linestyle='-', marker='o', condition='MAML (ours)', legend=legend)
 sns.tsplot(time=range(n_itr), data=pretrain_data[:,:n_itr], color='b', linestyle='--', marker='s', condition='pretrained', legend=legend)
-sns.tsplot(time=range(n_itr), data=random_data[:,:n_itr], color='k', linestyle=':', marker='^', condition='random', legend=legend)
+#sns.tsplot(time=range(n_itr), data=random_data[:,:n_itr], color='k', linestyle=':', marker='^', condition='random', legend=legend)
 sns.tsplot(time=range(n_itr), data=oracle_data[:,:n_itr], color='r', linestyle='-.', marker='v', condition='oracle', legend=legend)
 ax = fig.gca()
 
