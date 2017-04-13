@@ -150,36 +150,22 @@ class BatchSensitivePolopt(RLAlgorithm):
             for itr in range(self.start_itr, self.n_itr):
                 itr_start_time = time.time()
                 with logger.prefix('itr #%d | ' % itr):
-                    # TODO - this is specific to the pointmass task / goal task.
-                    # point mass:
+                    # TODO - this is a hacky way to specify tasks.
                     if self.env.observation_space.shape[0] <= 4:  # pointmass (oracle=4, normal=2)
                         learner_env_goals = np.zeros((self.meta_batch_size, 2, ))
-                        # 0d
-                        #goals = [np.array([-0.5,0]), np.array([0.5,0])]
-                        # 10 goals
-                        #goals = np.array([[-0.5,0], [0.5,0],[0.2,0.2],[-0.2,-0.2],[0.5,0.5],[0,0.5],[0,-0.5],[-0.5,-0.5],[0.5,-0.5],[-0.5,0.5]])
-                        #for i in range(self.meta_batch_size):
-                        #    learner_env_goals[i,:] = goals[np.random.randint(len(goals))]
-                        """
-                        goals = [np.array([-0.5,0]), np.array([0.5,0])]
-                        goals = [np.array([0.5,0.1]), np.array([0.5,-0.1])]
-                        goals = [np.array([0.5,0.0]), np.array([-0.5,0.0]),
-                                 np.array([0.0,0.5]), np.array([0.0,-0.5]),
-                                 np.array([0.5,0.5]), np.array([0.5,-0.5]),
-                                 np.array([-0.5,0.5]), np.array([-0.5,-0.5]),
-                                 ]
-                        for i in range(self.meta_batch_size):
-                            learner_env_goals[i,:] = goals[np.random.randint(len(goals))]
-                        """
                         # 2d
                         learner_env_goals = np.random.uniform(-0.5, 0.5, size=(self.meta_batch_size, 2, ))
-                        #learner_env_goals[:, 1] = 0  # this makes it 1d
+
                     elif self.env.spec.action_space.shape[0] == 8: # ant
-                        #learner_env_goals = np.random.uniform(0.1, 0.8, (self.meta_batch_size, ))
+                        # 0.0 to 3.0 is what specifies the task -- goal vel ranges 0-3.0.
+                        # for fwd/bwd env, goal direc is backwards if < 1.5, forwards if > 1.5
                         learner_env_goals = np.random.uniform(0.0, 3.0, (self.meta_batch_size, ))
+
                     elif self.env.spec.action_space.shape[0] == 6: # cheetah
-                        #learner_env_goals = np.random.uniform(0.1, 0.8, (self.meta_batch_size, ))
+                        # 0.0 to 2.0 is what specifies the task -- goal vel ranges 0-2.0.
+                        # for fwd/bwd env, goal direc is backwards if < 1.0, forwards if > 1.0
                         learner_env_goals = np.random.uniform(0.0, 2.0, (self.meta_batch_size, ))
+
                     else:
                         raise NotImplementedError('unrecognized env')
 
