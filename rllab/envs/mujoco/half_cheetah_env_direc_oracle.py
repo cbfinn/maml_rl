@@ -25,7 +25,7 @@ class HalfCheetahEnvDirecOracle(MujocoEnv, Serializable):
             direcs = [-1,1]
             self.goal_direction = np.random.choice(direcs)
         else:
-            self.goal_direction = -1.0 if reset_args < 0.4 else 1.0
+            self.goal_direction = -1.0 if reset_args < 1.0 else 1.0
         self.reset_mujoco(init_state)
         self.model.forward()
         self.current_com = self.model.data.com_subtree[0]

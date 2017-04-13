@@ -33,8 +33,8 @@ class HalfCheetahEnvRandDirec(MujocoEnv, Serializable):
         if goal_vel is not None:
             self.goal_vel = goal_vel
         elif self.goal_vel is None:
-            self.goal_vel = np.random.uniform(0.1, 0.8)
-        self.goal_direction = -1.0 if self.goal_vel < 0.4 else 1.0
+            self.goal_vel = np.random.uniform(0.0, 2.0)
+        self.goal_direction = -1.0 if self.goal_vel < 1.0 else 1.0
         self.reset_mujoco(init_state)
         self.model.forward()
         self.current_com = self.model.data.com_subtree[0]
