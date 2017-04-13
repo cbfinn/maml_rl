@@ -21,27 +21,27 @@ class VG(VariantGenerator):
 
     @variant
     def fast_lr(self):
-        return [0.1,0.01, 1.0] # 0.1, 1.0 #[0.01, 0.05, 0.1]  # would like to try 0.01, 0.05, 0.1, 0.2
+        return [0.1]
 
     @variant
     def meta_step_size(self):
-        return [0.01] #[0.01, 0.02] #, 0.05, 0.1]
+        return [0.01]
 
     @variant
     def fast_batch_size(self):
-        return [10,20,40]  # # 20, 40
+        return [10, 20]  # #10, 20, 40
 
     @variant
     def meta_batch_size(self):
-        return [20,40] # try 20, 40
+        return [40] # at least a total batch size of 400. (meta batch size*fast batch size)
 
     @variant
     def seed(self):
         return [1]
 
     @variant
-    def direc(self):  # directionenv
-        return [True, False]
+    def direc(self):  # directionenv vs. goal velocity
+        return [False, True]
 
     @variant
     def mask(self):  # whether or not to mask
@@ -51,10 +51,6 @@ class VG(VariantGenerator):
 
 variants = VG().variants()
 
-#fast_learning_rates = [0.1]  # 0.5 works for [0.1, 0.2], too high for 2 step
-#fast_batch_size = 10  # 10 works for [0.1, 0.2], 20 doesn't improve much for [0,0.2]
-#meta_batch_size = 20  # 10 also works, but much less stable, 20 is fairly stable, 40 is more stable
-#meta_step_size = 0.01  # trpo constraint step size
 max_path_length = 200
 num_grad_updates = 1
 use_sensitive=True
@@ -62,6 +58,7 @@ use_sensitive=True
 for v in variants:
     direc = v['direc']
     mask = v['mask']
+    learning_rate = v['meta_step_size']
 
     if direc:
         env = TfEnv(normalize(HalfCheetahEnvRandDirec()))
@@ -85,7 +82,7 @@ for v in variants:
         max_path_length=max_path_length,
         meta_batch_size=v['meta_batch_size'],
         num_grad_updates=num_grad_updates,
-        n_itr=600,
+        n_itr=800,
         use_sensitive=use_sensitive,
         step_size=v['meta_step_size'],
         #optimizer_args={'tf_optimizer_args':{'learning_rate': learning_rate}},
@@ -97,12 +94,12 @@ for v in variants:
     run_experiment_lite(
         algo.train(),
         exp_prefix='bugfix_trpo_sensitive_cheetah' + direc + str(max_path_length),
-        exp_name=mask+'_sens'+str(int(use_sensitive))+'_fbs'+str(v['fast_batch_size'])+'_mbs'+str(v['meta_batch_size'])+'_flr_' + str(v['fast_lr'])  + '_mlr' + str(v['meta_step_size']),
+        exp_name=mask+'sens'+str(int(use_sensitive))+'_fbs'+str(v['fast_batch_size'])+'_mbs'+str(v['meta_batch_size'])+'_flr_' + str(v['fast_lr'])  + '_mlr' + str(v['meta_step_size']),
         # Number of parallel workers for sampling
         n_parallel=1,
         # Only keep the snapshot parameters for the last iteration
         snapshot_mode="gap",
-        snapshot_gap=50,
+        snapshot_gap=25,
         sync_s3_pkl=True,
         # Specifies the seed for the experiment. If this is not provided, a random seed
         # will be used
