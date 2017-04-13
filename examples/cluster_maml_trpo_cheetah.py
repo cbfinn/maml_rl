@@ -85,7 +85,6 @@ for v in variants:
         n_itr=800,
         use_sensitive=use_sensitive,
         step_size=v['meta_step_size'],
-        #optimizer_args={'tf_optimizer_args':{'learning_rate': learning_rate}},
         plot=False,
     )
     mask = 'mask' if mask else ''
