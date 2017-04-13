@@ -32,7 +32,8 @@ class AntEnvOracle(MujocoEnv, Serializable):
         if goal_vel is not None:
             self._goal_vel = goal_vel
         else:
-            self._goal_vel = np.random.uniform(0.1, 0.8)
+            #self._goal_vel = np.random.uniform(0.1, 0.8)
+            self._goal_vel = np.random.uniform(0.0, 3.0)
         self.reset_mujoco(init_state)
         self.model.forward()
         self.current_com = self.model.data.com_subtree[0]

@@ -13,8 +13,8 @@ class AntEnvRand(MujocoEnv, Serializable):
 
     def __init__(self, goal= None, *args, **kwargs):
         self._goal_vel = goal
-        if goal is not None:
-            self._goal_vel *= 100
+        #if goal is not None:
+        #    self._goal_vel *= 100
         super(AntEnvRand, self).__init__(*args, **kwargs)
         Serializable.__init__(self, *args, **kwargs)
 
@@ -33,7 +33,8 @@ class AntEnvRand(MujocoEnv, Serializable):
         if goal_vel is not None:
             self._goal_vel = goal_vel
         elif self._goal_vel is None:
-            self._goal_vel = np.random.uniform(0.1, 0.8)
+            #self._goal_vel = np.random.uniform(0.1, 0.8)
+            self._goal_vel = np.random.uniform(0.0, 3.0)
         self.reset_mujoco(init_state)
         self.model.forward()
         self.current_com = self.model.data.com_subtree[0]
