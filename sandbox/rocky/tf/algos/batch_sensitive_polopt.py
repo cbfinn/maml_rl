@@ -174,10 +174,12 @@ class BatchSensitivePolopt(RLAlgorithm):
                         # 2d
                         learner_env_goals = np.random.uniform(-0.5, 0.5, size=(self.meta_batch_size, 2, ))
                         #learner_env_goals[:, 1] = 0  # this makes it 1d
-                    elif self.env.observation_space.shape[0] >= 10:  # swimmer or cheetah
-                        #learner_env_goals = np.random.choice((0.1, 0.2), (self.meta_batch_size, ))
-                        #learner_env_goals = np.random.uniform(0.1, 0.2, (self.meta_batch_size, ))
-                        learner_env_goals = np.random.uniform(0.1, 0.8, (self.meta_batch_size, ))
+                    elif self.env.spec.action_space.shape[0] == 8: # ant
+                        #learner_env_goals = np.random.uniform(0.1, 0.8, (self.meta_batch_size, ))
+                        learner_env_goals = np.random.uniform(0.0, 3.0, (self.meta_batch_size, ))
+                    elif self.env.spec.action_space.shape[0] == 6: # cheetah
+                        #learner_env_goals = np.random.uniform(0.1, 0.8, (self.meta_batch_size, ))
+                        learner_env_goals = np.random.uniform(0.0, 2.0, (self.meta_batch_size, ))
                     else:
                         raise NotImplementedError('unrecognized env')
 
