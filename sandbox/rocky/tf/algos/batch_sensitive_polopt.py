@@ -79,8 +79,8 @@ class BatchSensitivePolopt(RLAlgorithm):
         self.scope = scope
         self.n_itr = n_itr
         self.start_itr = start_itr
-        # self.batch_size is the number of total transitions to collect.
         # batch_size is the number of trajectories for one fast grad update.
+        # self.batch_size is the number of total transitions to collect.
         self.batch_size = batch_size * max_path_length * meta_batch_size
         self.max_path_length = max_path_length
         self.discount = discount
@@ -93,20 +93,15 @@ class BatchSensitivePolopt(RLAlgorithm):
         self.whole_paths = whole_paths
         self.fixed_horizon = fixed_horizon
         self.meta_batch_size = meta_batch_size # number of tasks
-        self.num_grad_updates = num_grad_updates
+        self.num_grad_updates = num_grad_updates # number of gradient steps during training
 
         if sampler_cls is None:
-            #if self.policy.vectorized and not force_batch_sampler:
             sampler_cls = VectorizedSampler
-            #else:
-            #    raise NotImplementedError('need # of envs')
-            #    sampler_cls = BatchSampler
         if sampler_args is None:
             sampler_args = dict()
         sampler_args['n_envs'] = self.meta_batch_size
-        #sampler_args['n_envs'] = batch_size*self.meta_batch_size  # fast batch size
         self.sampler = sampler_cls(self, **sampler_args)
-        #self.init_opt()
+        #self.init_opt()  # init_opt now happens in train()
 
     def start_worker(self):
         self.sampler.start_worker()
@@ -118,6 +113,8 @@ class BatchSensitivePolopt(RLAlgorithm):
 
     def obtain_samples(self, itr, reset_args=None):
         # This obtains samples using self.policy, and calling policy.get_actions(obses)
+        # return_dict specifies how the samples should be returned (dict separates samples
+        # by task)
         paths = self.sampler.obtain_samples(itr, reset_args, return_dict=True)
         assert type(paths) == dict
         return paths
@@ -130,19 +127,21 @@ class BatchSensitivePolopt(RLAlgorithm):
         flatten_list = lambda l: [item for sublist in l for item in sublist]
 
         with tf.Session() as sess:
+
+            # Code for loading a previous policy. Somewhat hacky because needs to be in sess.
             if self.load_policy is not None:
                 import joblib
                 self.policy = joblib.load(self.load_policy)['policy']
             self.init_opt()
-            # initialize uninitialized vars
+            # initialize uninitialized vars  (only initialize vars that were not loaded)
             uninit_vars = []
             for var in tf.all_variables():
+                # note - this is hacky, may be better way to do this in newer TF.
                 try:
                     sess.run(var)
                 except tf.errors.FailedPreconditionError:
                     uninit_vars.append(var)
             sess.run(tf.initialize_variables(uninit_vars))
-            #sess.run(tf.initialize_all_variables())
 
 
             self.start_worker()
@@ -150,6 +149,7 @@ class BatchSensitivePolopt(RLAlgorithm):
             for itr in range(self.start_itr, self.n_itr):
                 itr_start_time = time.time()
                 with logger.prefix('itr #%d | ' % itr):
+                    logger.log("Sampling set of tasks/goals for this meta-batch...")
                     # TODO - this is a hacky way to specify tasks.
                     if self.env.observation_space.shape[0] <= 4:  # pointmass (oracle=4, normal=2)
                         learner_env_goals = np.zeros((self.meta_batch_size, 2, ))
@@ -171,7 +171,6 @@ class BatchSensitivePolopt(RLAlgorithm):
 
                     self.policy.switch_to_init_dist()  # Switch to pre-update policy
 
-
                     all_samples_data, all_paths = [], []
                     for step in range(self.num_grad_updates+1):
                         logger.log('** Step ' + str(step) + ' **')
@@ -181,6 +180,7 @@ class BatchSensitivePolopt(RLAlgorithm):
                         logger.log("Processing samples...")
                         samples_data = {}
                         for key in paths.keys():
+                            # don't log because this will spam the consol with every task.
                             samples_data[key] = self.process_samples(itr, paths[key], log=False)
                         all_samples_data.append(samples_data)
                         # for logging purposes only
@@ -191,22 +191,9 @@ class BatchSensitivePolopt(RLAlgorithm):
                             logger.log("Computing policy updates...")
                             self.policy.compute_updated_dists(samples_data)
 
-                    """
-                    if itr % 20 == 0:
-                        logger.log('Testing policy with multiple grad steps')
-                        new_samples_data = updated_samples_data
-                        for test_i in range(3):
-                            self.policy.compute_updated_dists(new_samples_data)
-                            new_paths = self.obtain_samples(itr, reset_args=learner_env_goals)
-                            new_samples_data = {}
-                            for key in new_paths.keys():
-                                new_samples_data[key] = self.process_samples(itr, new_paths[key], log=False)
-                                # for logging purposes only
-                            self.process_samples(itr, flatten_list(new_paths.values()), prefix='Post'+str(test_i+2), log=True)
-                    """
 
                     logger.log("Optimizing policy...")
-                    # This needs to take both init_samples_data and samples_data
+                    # This needs to take all samples_data so that it can construct graph for meta-optimization.
                     self.optimize_policy(itr, all_samples_data)
                     logger.log("Saving snapshot...")
                     params = self.get_itr_snapshot(itr, all_samples_data[-1])  # , **kwargs)
@@ -216,7 +203,8 @@ class BatchSensitivePolopt(RLAlgorithm):
                     logger.log("Saved")
                     logger.record_tabular('Time', time.time() - start_time)
                     logger.record_tabular('ItrTime', time.time() - itr_start_time)
-                    #if self.plot and itr % 2 == 0:
+
+                    # Below commented out code is useful for visualizing trajectories across a few different tasks.
                     """
                     if itr % 2 == 0 and self.env.observation_space.shape[0] <= 4: # point-mass
                         logger.log("Saving visualization of paths")

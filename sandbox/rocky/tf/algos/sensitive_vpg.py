@@ -63,9 +63,9 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
     @overrides
     def init_opt(self):
         # TODO Commented out all KL stuff for now, since it is only used for logging
-
+        # To see how it can be turned on, see sensitive_npo.py
         is_recurrent = int(self.policy.recurrent)
-        assert not is_recurrent
+        assert not is_recurrent # not supported right now.
         dist = self.policy.distribution
 
         old_dist_info_vars, old_dist_info_vars_list = [], []
@@ -123,12 +123,6 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
         mean_kl = tf.reduce_mean(tf.concat(0, kls))
         max_kl = tf.reduce_max(tf.concat(0, kls))
         input_list += obs_vars + action_vars + adv_vars
-
-        # TODO - make this not hacky if it does something decent
-        self.all_steps_opt = True
-        if self.all_steps_opt:
-            for j in range(1, self.num_grad_updates):
-                surr_obj += tf.reduce_mean(tf.pack(all_surr_objs[j], 0))
 
         if self.use_sensitive:
             self.optimizer.update_opt(loss=surr_obj, target=self.policy, inputs=input_list)

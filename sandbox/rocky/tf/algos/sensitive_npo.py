@@ -76,7 +76,6 @@ class SensitiveNPO(BatchSensitivePolopt):
 
         state_info_vars, state_info_vars_list = {}, []
 
-
         all_surr_objs, input_list = [], []
         new_params = None
         for j in range(self.num_grad_updates):
@@ -99,7 +98,6 @@ class SensitiveNPO(BatchSensitivePolopt):
                 new_params.append(params)
                 logli = dist.log_likelihood_sym(action_vars[i], dist_info_vars)
 
-
                 # formulate as a minimization problem
                 # The gradient of the surrogate objective is the policy gradient
                 surr_objs.append(- tf.reduce_mean(logli * adv_vars[i]))
@@ -111,7 +109,6 @@ class SensitiveNPO(BatchSensitivePolopt):
                 init_input_list = input_list
 
             all_surr_objs.append(surr_objs)
-
 
         obs_vars, action_vars, adv_vars = self.make_vars('test')
         surr_objs = []
