@@ -21,30 +21,12 @@ import tensorflow as tf
 
 sens = False
 
-#initial_params_file = 'data/local/trpo-sensitive-point/bignet_sens1_fbs20_mbs100_flr_1.0baseline_linear_step11_oracle0/params.pkl'
-#initial_params_file = 'data/local/trpo-sensitive-point/bignet_sens1_fbs20_mbs100_flr_1.0baseline_linear_step11_oracle0/params.pkl'
-#initial_params_file = 'data/local/trpo-sensitive-point/bignet_sens0_fbs20_mbs100_flr_1.0metalr_0.01_step11_oracle0/params.pkl'
-#initial_params_file = 'data/local/trpo-sensitive-point0d/bignet_sens1_fbs20_mbs100_flr_1.0metalr_0.01_step11_oracle0/params.pkl'
-
-# 10 goal
-#initial_params_file = 'data/local/trpo-sensitive-point10goal/sens1_fbs20_mbs100_flr_1.0metalr_0.01_step11_oracle0/params.pkl'
-initial_params_file = 'data/local/trpo-sensitive-point10goal/randenv/params.pkl'
-
-# 2d range of goals
-#initial_params_file = 'data/local/vpg-sensitive-point/sens1_fbs20_mbs100_flr_1.0metalr_0.01_step11/params.pkl'
-#initial_params_file = 'data/local/vpg-sensitive-point/randenv/params.pkl'
-
 # horizon of 100
-#initial_params_file1 = 'data/local/vpg-sensitive-point100/sens1_fbs20_mbs20_flr_1.0metalr_0.01_step11/params.pkl'
 initial_params_file1 = 'data/local/vpg-sensitive-point100/trposens1_fbs20_mbs20_flr_0.5metalr_0.01_step11/params.pkl'
 initial_params_file2 = 'data/local/vpg-sensitive-point100/vpgrandenv/params.pkl'
 initial_params_file3 = 'data/local/vpg-sensitive-point100/sens0_fbs20_mbs20_flr_1.0metalr_0.01_step11/params.pkl'
 initial_params_file4 = 'data/local/vpg-sensitive-point100/oracleenv2/params.pkl'
 file_mask = 'data/local/deleteme/trposens1_fbs20_mbs20_flr_0.5metalr_0.01_step11/params.pkl'
-#initial_params_files = [initial_params_file1, initial_params_file3, initial_params_file4]
-
-# the 10 goals
-#goals = [[-0.5,0], [0.5,0],[0.2,0.2],[-0.2,-0.2],[0.5,0.5],[0,0.5],[0,-0.5],[-0.5,-0.5],[0.5,-0.5],[-0.5,0.5]]
 
 test_num_goals = 40
 np.random.seed(1)
@@ -52,8 +34,6 @@ goals = np.random.uniform(-0.5, 0.5, size=(test_num_goals, 2, ))
 print(goals)
 
 goals = [goals[6]]
-
-
 
 
 # ICML values
