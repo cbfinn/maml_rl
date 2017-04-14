@@ -23,6 +23,7 @@ tf_layers = None
 load_params = True
 
 ### Start Helper functions ###
+# TODO - share these helpers between minimal and sens_minimal mlp policies
 def make_input(shape, input_var=None, name="input", **kwargs):
     if input_var is None:
         if name is not None:
@@ -51,8 +52,7 @@ def add_param(spec, shape, layer_name, name, weight_norm=None, variable_reuse=No
         tags['trainable'] = tags.get('trainable', True)
         tags['regularizable'] = tags.get('regularizable', True)
         param = _create_param(spec, shape, name, **tags)
-        #self.params[param] = set(tag for tag, value in list(tags.items()) if value)
-    if weight_norm: # TODO
+    if weight_norm:
         raise NotImplementedError('Chelsea does not support this.')
     return param
 
@@ -155,7 +155,6 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
                 output_dim=action_dim,
                 hidden_sizes=hidden_sizes,
             )
-            #input_tensor = make_input(shape=(None, obs_dim,), input_var=None, name='input')
             input_tensor, mean_tensor = self.forward_MLP('mean_network', mean_params, n_hidden=len(hidden_sizes),
                 input_shape=(obs_dim,),
                 hidden_nonlinearity=hidden_nonlinearity,
@@ -169,10 +168,11 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
             raise NotImplementedError('Chelsea does not support this.')
 
         if std_network is not None:
-            raise NotImplementedError('Contained Gaussian MLP does not support this.')
+            raise NotImplementedError('Minimal Gaussian MLP does not support this.')
         else:
             if adaptive_std:
-                # NOTE - this isn't tested.
+                # NOTE - this branch isn't tested
+                raise NotImplementedError('Minimal Gaussian MLP doesnt have a tested version of this.')
                 self.std_params = std_params = self.create_MLP(
                     name="std_network",
                     input_shape=(None, obs_dim,),
@@ -220,7 +220,7 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
         mean_var = dist_info_sym["mean"]
         log_std_var = dist_info_sym["log_std"]
 
-        self._f_dist = tensor_utils.compile_function(  # this probably also works...
+        self._f_dist = tensor_utils.compile_function(
             inputs=[input_tensor],
             outputs=[mean_var, log_std_var],
         )
@@ -234,7 +234,6 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
         # obs_var - observation tensor
         # mean_var - tensor for policy mean
         # std_param_var - tensor for policy std before output
-        #mean_var, std_param_var = L.get_output([self._l_mean, self._l_std_param], obs_var)
         mean_var = self._forward_mean(obs_var, is_training)
         std_param_var = self._forward_std(obs_var)
         if self.min_std_param is not None:
@@ -277,8 +276,6 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
         params = [p for p in params if p.name.startswith('mean_network') or p.name.startswith('output_std_param')]
         params = [p for p in params if 'Adam' not in p.name]
         return params
-        #if regularizable in tags.keys():
-        #    import pdb; pdb.set_trace()
 
     # This makes all of the parameters.
     def create_MLP(self, name, output_dim, hidden_sizes,
@@ -357,7 +354,7 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
         log_stds = np.vstack([path["agent_infos"]["log_std"] for path in paths])
         logger.record_tabular('AveragePolicyStd', np.mean(np.exp(log_stds)))
 
-    #### CODE NOT USED AFTER HERE ####
+    #### code not used after here, uunless loading policy ####
     def get_reparam_action_sym(self, obs_var, action_var, old_dist_info_vars):
         """
         Given observations, old actions, and distribution of old actions, return a symbolically reparameterized
@@ -368,7 +365,7 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
         :return:
         """
         # Not used
-        print('--this really shouldnt be used--')
+        print('--this really shouldnt be used, not updated from non-minimal policy--')
         new_dist_info_vars = self.dist_info_sym(obs_var, action_var)
         new_mean_var, new_log_std_var = new_dist_info_vars["mean"], new_dist_info_vars["log_std"]
         old_mean_var, old_log_std_var = old_dist_info_vars["mean"], old_dist_info_vars["log_std"]
@@ -386,7 +383,6 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
         return self._cached_param_dtypes[tag_tuple]
 
     def get_param_shapes(self, **tags):
-        # Not used.
         tag_tuple = tuple(sorted(list(tags.items()), key=lambda x: x[0]))
         if tag_tuple not in self._cached_param_shapes:
             params = self.get_params(**tags)
@@ -395,7 +391,6 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
         return self._cached_param_shapes[tag_tuple]
 
     def set_param_values(self, flattened_params, **tags):
-        # Not used.
         debug = tags.pop("debug", False)
         param_values = unflatten_tensors(
             flattened_params, self.get_param_shapes(**tags))
@@ -417,7 +412,6 @@ class GaussianMLPPolicy(StochasticPolicy, Serializable):
         tf.get_default_session().run(ops, feed_dict=feed_dict)
 
     def flat_to_params(self, flattened_params, **tags):
-        # Not used.
         return unflatten_tensors(flattened_params, self.get_param_shapes(**tags))
 
     def __getstate__(self):
