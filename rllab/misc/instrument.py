@@ -15,7 +15,8 @@ from rllab.core.serializable import Serializable
 from rllab import config
 from rllab.misc.console import mkdir_p
 from rllab.misc import ext
-from io import StringIO
+#from io import StringIO  # python 3
+#from StringIO import StringIO  # python 2
 import datetime
 import dateutil.tz
 import json
@@ -696,6 +697,7 @@ def launch_ec2(params_list, exp_prefix, docker_image, code_full_path,
         aws_config = dict()
     aws_config = dict(default_config, **aws_config)
 
+    from io import StringIO  # python 2
     sio = StringIO()
     sio.write("#!/bin/bash\n")
     sio.write("{\n")

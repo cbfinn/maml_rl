@@ -160,7 +160,8 @@ class ConjugateGradientOptimizer(Serializable):
         self._debug_nan = debug_nan
         self._accept_violation = accept_violation
         if hvp_approach is None:
-            hvp_approach = PerlmutterHvp(num_slices)
+            hvp_approach = FiniteDifferenceHvp(num_slices)
+            #hvp_approach = PerlmutterHvp(num_slices)
         self._hvp_approach = hvp_approach
 
     def update_opt(self, loss, target, leq_constraint, inputs, extra_inputs=None, constraint_name="constraint", *args,

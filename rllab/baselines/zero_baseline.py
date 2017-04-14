@@ -17,7 +17,7 @@ class ZeroBaseline(Baseline):
         pass
 
     @overrides
-    def fit(self, paths):
+    def fit(self, paths, **kwargs):
         pass
 
     @overrides

@@ -203,14 +203,16 @@ def setup_s3():
         aws_access_key_id=ACCESS_KEY,
         aws_secret_access_key=ACCESS_SECRET,
     )
+    import pdb; pdb.set_trace()
     try:
         s3_client.create_bucket(
             ACL='private',
             Bucket=S3_BUCKET_NAME,
+            CreateBucketConfiguration={'LocationConstraint':'us-west-1'}
         )
     except botocore.exceptions.ClientError as e:
         if e.response['Error']['Code'] == 'BucketAlreadyExists':
-            raise ValueError("Bucket %s already exists. Please reconfigure S3_BUCKET_NAME" % S3_BUCKET_NAME) from e
+            raise ValueError("Bucket %s already exists. Please reconfigure S3_BUCKET_NAME" % S3_BUCKET_NAME)
         elif e.response['Error']['Code'] == 'BucketAlreadyOwnedByYou':
             print("Bucket already created by you")
         else:
@@ -219,7 +221,8 @@ def setup_s3():
 
 
 def setup_ec2():
-    for region in ["us-east-1", "us-west-1", "us-west-2"]:
+    #for region in ["us-east-1", "us-west-1", "us-west-2"]:
+    for region in ["us-west-1"]:
         print("Setting up region %s" % region)
 
         ec2 = boto3.resource(
@@ -250,6 +253,8 @@ def setup_ec2():
                 raise e
 
         ALL_REGION_AWS_SECURITY_GROUP_IDS[region] = [security_group.id]
+
+        import pdb; pdb.set_trace()
 
         ec2_client.create_tags(Resources=[security_group.id], Tags=[{'Key': 'Name', 'Value': 'rllab-sg'}])
         try:

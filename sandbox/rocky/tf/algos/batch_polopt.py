@@ -36,6 +36,8 @@ class BatchPolopt(RLAlgorithm):
             sampler_cls=None,
             sampler_args=None,
             force_batch_sampler=False,
+            load_policy=None,
+            reset_arg=None,
             **kwargs
     ):
         """
@@ -61,6 +63,7 @@ class BatchPolopt(RLAlgorithm):
         """
         self.env = env
         self.policy = policy
+        self.load_policy=load_policy
         self.baseline = baseline
         self.scope = scope
         self.n_itr = n_itr
@@ -77,14 +80,14 @@ class BatchPolopt(RLAlgorithm):
         self.whole_paths = whole_paths
         self.fixed_horizon = fixed_horizon
         if sampler_cls is None:
-            if self.policy.vectorized and not force_batch_sampler:
-                sampler_cls = VectorizedSampler
-            else:
-                sampler_cls = BatchSampler
+            #if self.policy.vectorized and not force_batch_sampler:
+            sampler_cls = VectorizedSampler
+            #else:
+            #    sampler_cls = BatchSampler
         if sampler_args is None:
             sampler_args = dict()
         self.sampler = sampler_cls(self, **sampler_args)
-        self.init_opt()
+        self.reset_arg = reset_arg
 
     def start_worker(self):
         self.sampler.start_worker()
@@ -95,19 +98,32 @@ class BatchPolopt(RLAlgorithm):
         self.sampler.shutdown_worker()
 
     def obtain_samples(self, itr):
-        return self.sampler.obtain_samples(itr)
+        return self.sampler.obtain_samples(itr, reset_args=self.reset_arg)
 
     def process_samples(self, itr, paths):
         return self.sampler.process_samples(itr, paths)
 
     def train(self):
         with tf.Session() as sess:
-            sess.run(tf.initialize_all_variables())
+            if self.load_policy is not None:
+                import joblib
+                self.policy = joblib.load(self.load_policy)['policy']
+            self.init_opt()
+            # initialize uninitialized vars (I know, it's ugly)
+            uninit_vars = []
+            for var in tf.all_variables():
+                try:
+                    sess.run(var)
+                except tf.errors.FailedPreconditionError:
+                    uninit_vars.append(var)
+            sess.run(tf.initialize_variables(uninit_vars))
+            #sess.run(tf.initialize_all_variables())
             self.start_worker()
             start_time = time.time()
             for itr in range(self.start_itr, self.n_itr):
                 itr_start_time = time.time()
                 with logger.prefix('itr #%d | ' % itr):
+
                     logger.log("Obtaining samples...")
                     paths = self.obtain_samples(itr)
                     logger.log("Processing samples...")
@@ -116,6 +132,8 @@ class BatchPolopt(RLAlgorithm):
                     self.log_diagnostics(paths)
                     logger.log("Optimizing policy...")
                     self.optimize_policy(itr, samples_data)
+                    #new_param_values = self.policy.get_variable_values(self.policy.all_params)
+
                     logger.log("Saving snapshot...")
                     params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
                     if self.store_paths:
@@ -125,8 +143,13 @@ class BatchPolopt(RLAlgorithm):
                     logger.record_tabular('Time', time.time() - start_time)
                     logger.record_tabular('ItrTime', time.time() - itr_start_time)
 
+                    import pickle
+                    with open('paths_itr'+str(itr)+'.pkl', 'wb') as f:
+                        pickle.dump(paths, f)
+
                     # debugging
-                    if itr % 2 == 0:
+                    """
+                    if itr % 1 == 0:
                         logger.log("Saving visualization of paths")
                         import matplotlib.pyplot as plt;
                         for ind in range(5):
@@ -137,6 +160,7 @@ class BatchPolopt(RLAlgorithm):
                             plt.ylim([-1.0, 1.0])
                             plt.legend(['path'])
                             plt.savefig('/home/cfinn/path'+str(ind)+'.png')
+                    """
                     # end debugging
 
                     logger.dump_tabular(with_prefix=False)

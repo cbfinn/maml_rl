@@ -49,7 +49,17 @@ class BaseSampler(Sampler):
         baselines = []
         returns = []
 
-        # TODO - is this doing some constant baseline automatically?
+        for idx, path in enumerate(paths):
+            path["returns"] = special.discount_cumsum(path["rewards"], self.algo.discount)
+        if log:
+            logger.log("fitting baseline...")
+        if hasattr(self.algo.baseline, 'fit_with_samples'):
+            self.algo.baseline.fit_with_samples(paths, samples_data)
+        else:
+            self.algo.baseline.fit(paths, log=log)
+        if log:
+            logger.log("fitted")
+
 
         if hasattr(self.algo.baseline, "predict_n"):
             all_path_baselines = self.algo.baseline.predict_n(paths)
@@ -63,7 +73,6 @@ class BaseSampler(Sampler):
                      path_baselines[:-1]
             path["advantages"] = special.discount_cumsum(
                 deltas, self.algo.discount * self.algo.gae_lambda)
-            path["returns"] = special.discount_cumsum(path["rewards"], self.algo.discount)
             baselines.append(path_baselines[:-1])
             returns.append(path["returns"])
 
@@ -161,16 +170,6 @@ class BaseSampler(Sampler):
                 env_infos=env_infos,
                 paths=paths,
             )
-
-        if log:
-            logger.log("fitting baseline...")
-        if hasattr(self.algo.baseline, 'fit_with_samples'):
-            self.algo.baseline.fit_with_samples(paths, samples_data)
-        else:
-            self.algo.baseline.fit(paths, log=log)
-        if log:
-            logger.log("fitted")
-
         if log:
             #logger.record_tabular('Iteration', itr)
             #logger.record_tabular('AverageDiscountedReturn',

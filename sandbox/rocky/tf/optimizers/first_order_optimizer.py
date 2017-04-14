@@ -23,12 +23,12 @@ class FirstOrderOptimizer(Serializable):
             self,
             tf_optimizer_cls=None,
             tf_optimizer_args=None,
-            # learning_rate=1e-3,
             max_epochs=1000,
             tolerance=1e-6,
             batch_size=32,
             callback=None,
             verbose=False,
+            init_learning_rate=None,
             **kwargs):
         """
 
@@ -48,13 +48,19 @@ class FirstOrderOptimizer(Serializable):
             tf_optimizer_cls = tf.train.AdamOptimizer
         if tf_optimizer_args is None:
             tf_optimizer_args = dict(learning_rate=1e-3)
+        self.learning_rate = tf_optimizer_args['learning_rate']
         self._tf_optimizer = tf_optimizer_cls(**tf_optimizer_args)
+        self._init_tf_optimizer = None
+        if init_learning_rate is not None:
+            init_tf_optimizer_args = dict(learning_rate=init_learning_rate)
+            self._init_tf_optimizer = tf_optimizer_cls(**init_tf_optimizer_args)
         self._max_epochs = max_epochs
         self._tolerance = tolerance
         self._batch_size = batch_size
         self._verbose = verbose
         self._input_vars = None
         self._train_op = None
+        self._init_train_op = None
 
     def update_opt(self, loss, target, inputs, extra_inputs=None, **kwargs):
         # Initializes the update opt used in the optimization
@@ -76,8 +82,12 @@ class FirstOrderOptimizer(Serializable):
             with tf.control_dependencies([updates]):
 
                 self._train_op = self._tf_optimizer.minimize(loss, var_list=target.get_params(trainable=True))
+                if self._init_tf_optimizer is not None:
+                    self._init_train_op = self._init_tf_optimizer.minimize(loss, var_list=target.get_params(trainable=True))
         else:
             self._train_op = self._tf_optimizer.minimize(loss, var_list=target.get_params(trainable=True))
+            if self._init_tf_optimizer is not None:
+                self._init_train_op = self._init_tf_optimizer.minimize(loss, var_list=target.get_params(trainable=True))
 
         if extra_inputs is None:
             extra_inputs = list()
@@ -85,6 +95,10 @@ class FirstOrderOptimizer(Serializable):
         self._opt_fun = ext.lazydict(
             f_loss=lambda: tensor_utils.compile_function(inputs + extra_inputs, loss),
         )
+
+        self.debug_loss = loss
+        self.debug_vars = target.get_params(trainable=True)
+        self.debug_target = target
 
     def loss(self, inputs, extra_inputs=None):
         if extra_inputs is None:
@@ -116,7 +130,12 @@ class FirstOrderOptimizer(Serializable):
                 progbar = pyprind.ProgBar(len(inputs[0]))
 
             for batch in dataset.iterate(update=True):
-                sess.run(self._train_op, dict(list(zip(self._input_vars, batch))))
+                if self._init_train_op is not None:
+                    sess.run(self._init_train_op, dict(list(zip(self._input_vars, batch))))
+                    self._init_train_op = None  # only use it once
+                else:
+                    sess.run(self._train_op, dict(list(zip(self._input_vars, batch))))
+
                 if self._verbose:
                     progbar.update(len(batch[0]))
 

@@ -28,9 +28,9 @@ algo = SensitiveVPG(
     env=env,
     policy=policy,
     baseline=baseline,
-    batch_size=5000, # use 100 trajs for grad update
+    batch_size=20, # use 100 trajs for grad update
     max_path_length=5,
-    meta_batch_size=10,
+    meta_batch_size=100,
     n_itr=100,
     use_sensitive=False,
     optimizer_args={'learning_rate': 1e-3}
@@ -42,6 +42,6 @@ run_experiment_lite(
     snapshot_mode="last",
     seed=1,
     exp_prefix='sensitive1dT5_2017_01_18',
-    exp_name='no_sensitive_linbaseline',
+    exp_name='nosensitive_linbaseline',
     #plot=True,
 )

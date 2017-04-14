@@ -63,4 +63,3 @@ for v in variants:
         # plot=True,
         # terminate_machine=False,
     )
-    sys.exit()

@@ -39,19 +39,20 @@ class HalfCheetahEnv(MujocoEnv, Serializable):
         next_obs = self.get_current_obs()
         action = np.clip(action, *self.action_bounds)
         ctrl_cost = 1e-1 * 0.5 * np.sum(np.square(action))
-        run_cost = -1 * self.get_body_comvel("torso")[0]
+        #run_cost = -1 * self.get_body_comvel("torso")[0]
+        run_cost = 1.*np.abs(self.get_body_comvel("torso")[0] - 0.1)
         cost = ctrl_cost + run_cost
         reward = -cost
         done = False
         return Step(next_obs, reward, done)
 
     @overrides
-    def log_diagnostics(self, paths):
+    def log_diagnostics(self, paths, prefix=''):
         progs = [
             path["observations"][-1][-3] - path["observations"][0][-3]
             for path in paths
         ]
-        logger.record_tabular('AverageForwardProgress', np.mean(progs))
-        logger.record_tabular('MaxForwardProgress', np.max(progs))
-        logger.record_tabular('MinForwardProgress', np.min(progs))
-        logger.record_tabular('StdForwardProgress', np.std(progs))
+        logger.record_tabular(prefix+'AverageForwardProgress', np.mean(progs))
+        logger.record_tabular(prefix+'MaxForwardProgress', np.max(progs))
+        logger.record_tabular(prefix+'MinForwardProgress', np.min(progs))
+        logger.record_tabular(prefix+'StdForwardProgress', np.std(progs))
