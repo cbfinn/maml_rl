@@ -135,14 +135,13 @@ class BatchSensitivePolopt(RLAlgorithm):
             self.init_opt()
             # initialize uninitialized vars  (only initialize vars that were not loaded)
             uninit_vars = []
-            for var in tf.all_variables():
+            for var in tf.global_variables():
                 # note - this is hacky, may be better way to do this in newer TF.
                 try:
                     sess.run(var)
                 except tf.errors.FailedPreconditionError:
                     uninit_vars.append(var)
-            sess.run(tf.initialize_variables(uninit_vars))
-
+            sess.run(tf.variables_initializer(uninit_vars))
 
             self.start_worker()
             start_time = time.time()
@@ -175,11 +174,11 @@ class BatchSensitivePolopt(RLAlgorithm):
                     for step in range(self.num_grad_updates+1):
                         logger.log('** Step ' + str(step) + ' **')
                         logger.log("Obtaining samples...")
-                        paths = self.obtain_samples(itr, reset_args=learner_env_goals)
+                        paths = self.obtain_samples(itr, reset_args=learner_env_goals)  ##CF not great that you have to pass here the resets
                         all_paths.append(paths)
                         logger.log("Processing samples...")
                         samples_data = {}
-                        for key in paths.keys():
+                        for key in paths.keys():  # the keys are the tasks
                             # don't log because this will spam the consol with every task.
                             samples_data[key] = self.process_samples(itr, paths[key], log=False)
                         all_samples_data.append(samples_data)

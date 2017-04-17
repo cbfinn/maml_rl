@@ -119,15 +119,15 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
 
             kls.append(dist.kl_sym(old_dist_info_vars[i], dist_info_vars))
 
-        surr_obj = tf.reduce_mean(tf.pack(surr_objs, 0))
-        mean_kl = tf.reduce_mean(tf.concat(0, kls))
-        max_kl = tf.reduce_max(tf.concat(0, kls))
+        surr_obj = tf.reduce_mean(tf.stack(surr_objs, 0))
+        mean_kl = tf.reduce_mean(tf.concat(kls, 0))
+        max_kl = tf.reduce_max(tf.concat(kls, 0))
         input_list += obs_vars + action_vars + adv_vars
 
         if self.use_sensitive:
             self.optimizer.update_opt(loss=surr_obj, target=self.policy, inputs=input_list)
         else:  # baseline method of just training initial policy
-            self.optimizer.update_opt(loss=tf.reduce_mean(tf.pack(all_surr_objs[0],0)), target=self.policy, inputs=init_input_list)
+            self.optimizer.update_opt(loss=tf.reduce_mean(tf.stack(all_surr_objs[0],0)), target=self.policy, inputs=init_input_list)
 
         f_kl = tensor_utils.compile_function(
             inputs=input_list + old_dist_info_vars_list,
