@@ -1,4 +1,5 @@
 import matplotlib
+import os.path as osp
 matplotlib.use('Pdf')
 
 import time
@@ -204,7 +205,6 @@ class BatchSensitivePolopt(RLAlgorithm):
                     logger.record_tabular('ItrTime', time.time() - itr_start_time)
 
                     # Below commented out code is useful for visualizing trajectories across a few different tasks.
-                    """
                     if itr % 2 == 0 and self.env.observation_space.shape[0] <= 4: # point-mass
                         logger.log("Saving visualization of paths")
                         import matplotlib.pyplot as plt;
@@ -235,7 +235,7 @@ class BatchSensitivePolopt(RLAlgorithm):
                             plt.xlim([-0.8, 0.8])
                             plt.ylim([-0.8, 0.8])
                             plt.legend(['goal', 'preupdate path', 'postupdate path'])
-                            plt.savefig('/home/cfinn/prepost_path'+str(ind)+'.png')
+                            plt.savefig(osp.join(logger.get_snapshot_dir(), 'prepost_path'+str(ind)+'.png'))
                     elif itr % 2 == 0:  # swimmer or cheetah
                         logger.log("Saving visualization of paths")
                         import matplotlib.pyplot as plt;
@@ -256,8 +256,7 @@ class BatchSensitivePolopt(RLAlgorithm):
                             plt.ylim([-1.0, 1.0])
 
                             plt.legend(['preupdate path', 'postupdate path'], loc=2)
-                            plt.savefig('/home/cfinn/swim1d_prepost_itr'+str(itr)+'_id'+str(ind)+'.pdf')
-                    """
+                            plt.savefig(osp.join(logger.get_snapshot_dir(), 'swim1d_prepost_itr'+str(itr)+'_id'+str(ind)+'.pdf'))
 
                     logger.dump_tabular(with_prefix=False)
                     #if self.plot:
