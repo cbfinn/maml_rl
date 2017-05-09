@@ -43,8 +43,8 @@ def _create_param(spec, shape, name, trainable=True, regularizable=True):
         regularizer = None
     else:
         regularizer = lambda _: tf.constant(0.)
-    regularizer = None
-    spec = None
+    # regularizer = None
+    # spec = None
     return tf.get_variable(
         name=name, shape=shape, initializer=spec, trainable=trainable,
         regularizer=regularizer, dtype=tf.float32
