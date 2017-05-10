@@ -44,7 +44,7 @@ def _create_param(spec, shape, name, trainable=True, regularizable=True):
     else:
         regularizer = lambda _: tf.constant(0.)
     # regularizer = None
-    # spec = None
+    # spec = tf_layers.xavier_initializer()
     return tf.get_variable(
         name=name, shape=shape, initializer=spec, trainable=trainable,
         regularizer=regularizer, dtype=tf.float32
@@ -59,7 +59,7 @@ def add_param(spec, shape, layer_name, name, weight_norm=None, variable_reuse=No
         raise NotImplementedError('Chelsea does not support this.')
     return param
 
-def make_dense_layer(input_shape, num_units, name='fc', W=L.XavierUniformInitializer(), b=tf.zeros_initializer, weight_norm=False, **kwargs):
+def make_dense_layer(input_shape, num_units, name='fc', W=tf_layers.xavier_initializer(), b=tf.zeros_initializer(), weight_norm=False, **kwargs):
     # make parameters
     num_inputs = int(np.prod(input_shape[1:]))
     W = add_param(W, (num_inputs, num_units), layer_name=name, name='W', weight_norm=weight_norm)
@@ -83,7 +83,7 @@ def forward_dense_layer(input, W, b, nonlinearity=tf.identity, batch_norm=False,
     else:
         return nonlinearity(activation)
 
-def make_param_layer(num_units, name='', param=tf.zeros_initializer, trainable=True):
+def make_param_layer(num_units, name='', param=tf.zeros_initializer(), trainable=True):
     param = add_param(param, (num_units,), layer_name=name, name='param', trainable=trainable)
     return param
 
@@ -424,8 +424,8 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
 
     # This makes all of the parameters.
     def create_MLP(self, name, output_dim, hidden_sizes,
-                   hidden_W_init=L.XavierUniformInitializer(), hidden_b_init=tf.zeros_initializer,
-                   output_W_init=L.XavierUniformInitializer(), output_b_init=tf.zeros_initializer,
+                   hidden_W_init=tf_layers.xavier_initializer(), hidden_b_init=tf.zeros_initializer(),
+                   output_W_init=tf_layers.xavier_initializer(), output_b_init=tf.zeros_initializer(),
                    weight_normalization=False,
                    ):
         all_params = {}
@@ -433,7 +433,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         cur_shape = self.input_shape
         with tf.variable_scope(name):
             if self.mask_units == True:
-                all_params['mask_units'] = add_param(tf.zeros_initializer, (cur_shape[1],), layer_name='mask_units', name='0', regularizable=False)
+                all_params['mask_units'] = add_param(tf.zeros_initializer(), (cur_shape[1],), layer_name='mask_units', name='0', regularizable=False)
                 cur_shape = (cur_shape[0], cur_shape[1]*2)
 
             for idx, hidden_size in enumerate(hidden_sizes):
