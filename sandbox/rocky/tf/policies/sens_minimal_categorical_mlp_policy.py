@@ -1,4 +1,6 @@
 #from sandbox.rocky.tf.core.layers_powered import LayersPowered
+from contextlib import contextmanager
+import numpy as np
 import sandbox.rocky.tf.core.layers as L
 #from sandbox.rocky.tf.core.network import MLP
 from rllab.core.serializable import Serializable
@@ -123,36 +125,34 @@ class SensitiveCategoricalMLPPolicy(StochasticPolicy, Serializable):
         self.action_dim = env_spec.action_space.n
         self.n_hidden = len(hidden_sizes)
         self.hidden_nonlinearity = hidden_nonlinearity
-        self.output_nonlinearity = output_nonlinearity
         self.input_shape = (None, obs_dim,)
         self.step_size = grad_step_size
 
-        with tf.variable_scope(name):
-            if prob_network is None:
-                self.all_params = self.create_MLP(
-                    input_shape=(obs_dim,),
-                    output_dim=self.action_dim,
-                    hidden_sizes=hidden_sizes,
-                    name="prob_network",
-                )
-            self._l_obs, self._l_prob = self.forward_MLP('prob_network', self.all_params,
-                n_hidden=len(hidden_sizes), input_shape=(obs_dim,),
-                hidden_nonlinearity=hidden_nonlinearity,
-                output_nonlinearity=tf.nn.softmax, reuse=None)
-
-            # if you want to input your own tensor.
-            self._forward_out = lambda x, params, is_train: self.forward_MLP('prob_network', params,
-                n_hidden=len(hidden_sizes), hidden_nonlinearity=hidden_nonlinearity,
-                output_nonlinearity=output_nonlinearity, input_tensor=x, is_training=is_train)[1]
-
-
-            self._init_f_prob = tensor_utils.compile_function(
-                [self._l_obs],
-                L.get_output(self._l_prob)
+        if prob_network is None:
+            self.all_params = self.create_MLP(
+                output_dim=self.action_dim,
+                hidden_sizes=hidden_sizes,
+                name="prob_network",
             )
-            self._cur_f_prob = self._init_f_prob
+        self._l_obs, self._l_prob = self.forward_MLP('prob_network', self.all_params,
+            n_hidden=len(hidden_sizes), input_shape=(obs_dim,),
+            hidden_nonlinearity=hidden_nonlinearity,
+            output_nonlinearity=tf.nn.softmax, reuse=None)
 
-            self._dist = Categorical(self.action_dim)
+        # if you want to input your own tensor.
+        self._forward_out = lambda x, params, is_train: self.forward_MLP('prob_network', params,
+            n_hidden=len(hidden_sizes), hidden_nonlinearity=hidden_nonlinearity,
+            output_nonlinearity=tf.nn.softmax, input_tensor=x, is_training=is_train)[1]
+
+
+        self._init_f_prob = tensor_utils.compile_function(
+            [self._l_obs],
+            [self._l_prob])
+        self._cur_f_prob = self._init_f_prob
+
+        self._dist = Categorical(self.action_dim)
+        self._cached_params = {}
+        super(SensitiveCategoricalMLPPolicy, self).__init__(env_spec)
 
 
     @property
@@ -245,7 +245,7 @@ class SensitiveCategoricalMLPPolicy(StochasticPolicy, Serializable):
             self.assign_params(self.all_params, init_param_values)
 
         outputs = []
-        inputs = tf.split(0, num_tasks, self.input_tensor)
+        inputs = tf.split(0, num_tasks, self._l_obs)
         for i in range(num_tasks):
             # TODO - use a placeholder to feed in the params, so that we don't have to recompile every time.
             task_inp = inputs[i]
@@ -255,7 +255,7 @@ class SensitiveCategoricalMLPPolicy(StochasticPolicy, Serializable):
             outputs.append([info['prob']])
 
         self._cur_f_prob = tensor_utils.compile_function(
-            inputs = [self.input_tensor],
+            inputs = [self._l_obs],
             outputs = outputs,
         )
 
@@ -296,10 +296,11 @@ class SensitiveCategoricalMLPPolicy(StochasticPolicy, Serializable):
         flat_obs = self.observation_space.flatten_n(observations)
         result = self._cur_f_prob(flat_obs)
         if len(result) == 1:
-            probs = result
+            probs = result[0]
         else:
-            import pdb; pdb.set_trace()
-            probs = result[:,0,:] # TODO - check this for updated dist.
+            #import pdb; pdb.set_trace()
+            # TODO - I think this is correct but not sure.
+            probs = np.array(result)[:,0,0,:]
         actions = list(map(self.action_space.weighted_sample, probs))
         return actions, dict(prob=probs)
 
@@ -312,9 +313,9 @@ class SensitiveCategoricalMLPPolicy(StochasticPolicy, Serializable):
     def create_MLP(self, name, output_dim, hidden_sizes,
                    hidden_W_init=L.XavierUniformInitializer(), hidden_b_init=tf.zeros_initializer,
                    output_W_init=L.XavierUniformInitializer(), output_b_init=tf.zeros_initializer,
-                   input_shape=None, weight_normalization=False,
+                   weight_normalization=False,
                    ):
-        assert input_shape is not None
+        input_shape = self.input_shape
         cur_shape = input_shape
         with tf.variable_scope(name):
             all_params = {}
@@ -366,4 +367,19 @@ class SensitiveCategoricalMLPPolicy(StochasticPolicy, Serializable):
                                          )
             return l_in, output
 
+
+    def get_params_internal(self, all_params=False, **tags):
+        if tags.get('trainable', False):
+            params = tf.trainable_variables()
+        else:
+            params = tf.all_variables()
+
+        # TODO - this is hacky...
+        params = [p for p in params if p.name.startswith('prob_network')]
+        params = [p for p in params if 'Adam' not in p.name]
+
+        return params
+
+    def log_diagnostics(self, paths, prefix=''):
+        pass
 

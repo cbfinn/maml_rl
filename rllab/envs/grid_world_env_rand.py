@@ -6,7 +6,8 @@ from rllab.core.serializable import Serializable
 
 # simple two state world would look like {"chain":['GSH'],"chain":['HSG']}
 MAPS = {
-    "two-state": [['GSH'],['HSG']]
+    "two-state": [['GSH'],['HSG']],
+    "four-state": [['HHH','GSH','HHH'],['HHH','HSG','HHH'],['HGH','HSH','HHH'], ['HHH','HSH','HGH']]
 }
 
 
@@ -16,7 +17,7 @@ class GridWorldEnvRand(Env, Serializable):
     'F': free space
     'W': wall
     'H': hole (terminates episode)
-    'G': goal
+    'G': goal (terminates episode)
 
     """
     def __init__(self, desc='two-state', map_id=None):
@@ -25,13 +26,14 @@ class GridWorldEnvRand(Env, Serializable):
         if isinstance(desc, str):
             desc = MAPS[desc]
         self.desc_choices = desc
+        self.reset()
 
     def reset(self, reset_args=None):
         map_id = reset_args
         if map_id is not None:
             self._map_id = map_id
         elif self._map_id is None:
-            self._map_id = np.randint(len(self.desc_choices))
+            self._map_id = np.random.randint(len(self.desc_choices))
 
         self.desc = np.array(list(map(list, self.desc_choices[self._map_id])))
         self.n_row, self.n_col = self.desc.shape

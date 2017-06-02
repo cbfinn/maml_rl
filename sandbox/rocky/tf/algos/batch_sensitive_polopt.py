@@ -9,6 +9,7 @@ from sandbox.rocky.tf.policies.base import Policy
 import tensorflow as tf
 from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
 from sandbox.rocky.tf.samplers.vectorized_sampler import VectorizedSampler
+from sandbox.rocky.tf.spaces import Discrete
 
 import numpy as np
 
@@ -151,7 +152,9 @@ class BatchSensitivePolopt(RLAlgorithm):
                 with logger.prefix('itr #%d | ' % itr):
                     logger.log("Sampling set of tasks/goals for this meta-batch...")
                     # TODO - this is a hacky way to specify tasks.
-                    if self.env.observation_space.shape[0] <= 4:  # pointmass (oracle=4, normal=2)
+                    if type(self.env.action_space) == Discrete:
+                        learner_env_goals = np.random.randint(4, size=(self.meta_batch_size,))
+                    elif self.env.observation_space.shape[0] <= 4:  # pointmass (oracle=4, normal=2)
                         learner_env_goals = np.zeros((self.meta_batch_size, 2, ))
                         # 2d
                         learner_env_goals = np.random.uniform(-0.5, 0.5, size=(self.meta_batch_size, 2, ))
