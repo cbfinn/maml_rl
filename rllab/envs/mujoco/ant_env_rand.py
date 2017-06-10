@@ -27,6 +27,9 @@ class AntEnvRand(MujocoEnv, Serializable):
             self.get_body_com("torso"),
         ]).reshape(-1)
 
+    def sample_goals(self, num_goals):
+        return np.random.uniform(0.0, 3.0, (num_goals, ))
+
     @overrides
     def reset(self, init_state=None, reset_args=None, **kwargs):
         goal_vel = reset_args

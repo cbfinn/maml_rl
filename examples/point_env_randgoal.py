@@ -16,6 +16,9 @@ class PointEnvRandGoal(Env):
     def action_space(self):
         return Box(low=-0.1, high=0.1, shape=(2,))
 
+    def sample_goals(self, num_goals):
+        return np.random.uniform(-0.5, 0.5, size=(num_goals, 2, ))
+
     def reset(self, reset_args=None):
         goal = reset_args
         if goal is not None:

@@ -26,6 +26,9 @@ class AntEnvOracle(MujocoEnv, Serializable):
         ]).reshape(-1)
         return np.r_[obs, np.array([self._goal_vel])]
 
+    def sample_goals(self, num_goals):
+        return np.random.uniform(0.0, 3.0, (num_goals, ))
+
     @overrides
     def reset(self, init_state=None, reset_args=None, **kwargs):
         goal_vel = reset_args
