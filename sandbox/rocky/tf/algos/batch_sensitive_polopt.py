@@ -150,24 +150,11 @@ class BatchSensitivePolopt(RLAlgorithm):
                 itr_start_time = time.time()
                 with logger.prefix('itr #%d | ' % itr):
                     logger.log("Sampling set of tasks/goals for this meta-batch...")
-                    # TODO - this is a hacky way to specify tasks.
-                    if self.env.observation_space.shape[0] <= 4:  # pointmass (oracle=4, normal=2)
-                        learner_env_goals = np.zeros((self.meta_batch_size, 2, ))
-                        # 2d
-                        learner_env_goals = np.random.uniform(-0.5, 0.5, size=(self.meta_batch_size, 2, ))
 
-                    elif self.env.spec.action_space.shape[0] == 8: # ant
-                        # 0.0 to 3.0 is what specifies the task -- goal vel ranges 0-3.0.
-                        # for fwd/bwd env, goal direc is backwards if < 1.5, forwards if > 1.5
-                        learner_env_goals = np.random.uniform(0.0, 3.0, (self.meta_batch_size, ))
-
-                    elif self.env.spec.action_space.shape[0] == 6: # cheetah
-                        # 0.0 to 2.0 is what specifies the task -- goal vel ranges 0-2.0.
-                        # for fwd/bwd env, goal direc is backwards if < 1.0, forwards if > 1.0
-                        learner_env_goals = np.random.uniform(0.0, 2.0, (self.meta_batch_size, ))
-
-                    else:
-                        raise NotImplementedError('unrecognized env')
+                    env = self.env
+                    while 'sample_goals' not in dir(env):
+                        env = env.wrapped_env
+                    learner_env_goals = env.sample_goals(self.meta_batch_size)
 
                     self.policy.switch_to_init_dist()  # Switch to pre-update policy
 

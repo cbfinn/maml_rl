@@ -27,6 +27,10 @@ class HalfCheetahEnvRandDirec(MujocoEnv, Serializable):
         self.goal_vel = goal_vel
         self.reset(reset_args=goal_vel)
 
+    def sample_goals(self, num_goals):
+        # for fwd/bwd env, goal direc is backwards if < 1.0, forwards if > 1.0
+        return np.random.uniform(0.0, 2.0, (num_goals, ))
+
     @overrides
     def reset(self, init_state=None, reset_args=None, **kwargs):
         goal_vel = reset_args

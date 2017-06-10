@@ -20,6 +20,9 @@ class HalfCheetahEnvRand(MujocoEnv, Serializable):
         super(HalfCheetahEnvRand, self).__init__(*args, **kwargs)
         Serializable.__init__(self, *args, **kwargs)
 
+    def sample_goals(self, num_goals):
+        return np.random.uniform(0.0, 2.0, (num_goals, ))
+
     @overrides
     def reset(self, init_state=None, reset_args=None, **kwargs):
         goal_vel = reset_args

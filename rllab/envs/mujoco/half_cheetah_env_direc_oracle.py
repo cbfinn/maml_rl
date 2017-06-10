@@ -19,6 +19,10 @@ class HalfCheetahEnvDirecOracle(MujocoEnv, Serializable):
         super(HalfCheetahEnvDirecOracle, self).__init__(*args, **kwargs)
         Serializable.__init__(self, *args, **kwargs)
 
+    def sample_goals(self, num_goals):
+        # for fwd/bwd env, goal direc is backwards if < 1.0, forwards if > 1.0
+        return np.random.uniform(0.0, 2.0, (num_goals, ))
+
     @overrides
     def reset(self, init_state=None, reset_args=None, **kwargs):
         if reset_args is None:
