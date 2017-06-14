@@ -97,6 +97,7 @@ class BatchSensitivePolopt(RLAlgorithm):
 
         if sampler_cls is None:
             sampler_cls = VectorizedSampler
+            #sampler_cls = BatchSampler
         if sampler_args is None:
             sampler_args = dict()
         sampler_args['n_envs'] = self.meta_batch_size
@@ -111,11 +112,11 @@ class BatchSensitivePolopt(RLAlgorithm):
     def shutdown_worker(self):
         self.sampler.shutdown_worker()
 
-    def obtain_samples(self, itr, reset_args=None):
+    def obtain_samples(self, itr, reset_args=None, log_prefix=''):
         # This obtains samples using self.policy, and calling policy.get_actions(obses)
         # return_dict specifies how the samples should be returned (dict separates samples
         # by task)
-        paths = self.sampler.obtain_samples(itr, reset_args, return_dict=True)
+        paths = self.sampler.obtain_samples(itr, reset_args, return_dict=True, log_prefix=log_prefix)
         assert type(paths) == dict
         return paths
 
@@ -162,7 +163,7 @@ class BatchSensitivePolopt(RLAlgorithm):
                     for step in range(self.num_grad_updates+1):
                         logger.log('** Step ' + str(step) + ' **')
                         logger.log("Obtaining samples...")
-                        paths = self.obtain_samples(itr, reset_args=learner_env_goals)
+                        paths = self.obtain_samples(itr, reset_args=learner_env_goals, log_prefix=str(step))
                         all_paths.append(paths)
                         logger.log("Processing samples...")
                         samples_data = {}
