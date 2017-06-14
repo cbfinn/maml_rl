@@ -89,9 +89,9 @@ def _worker_set_env_params(G,params,scope=None):
     G = _get_scoped_G(G, scope)
     G.env.set_param_values(params)
 
-def _worker_collect_one_path(G, max_path_length, scope=None):
+def _worker_collect_one_path(G, max_path_length, scope=None, reset_arg=None):
     G = _get_scoped_G(G, scope)
-    path = rollout(G.env, G.policy, max_path_length)
+    path = rollout(G.env, G.policy, max_path_length, reset_arg=None)
     return path, len(path["rewards"])
 
 
@@ -100,7 +100,8 @@ def sample_paths(
         max_samples,
         max_path_length=np.inf,
         env_params=None,
-        scope=None):
+        scope=None,
+        reset_arg=None):
     """
     :param policy_params: parameters for the policy. This will be updated on each worker process
     :param max_samples: desired maximum number of samples to be collected. The actual number of collected samples
@@ -121,7 +122,7 @@ def sample_paths(
     return singleton_pool.run_collect(
         _worker_collect_one_path,
         threshold=max_samples,
-        args=(max_path_length, scope),
+        args=(max_path_length, scope, reset_arg),
         show_prog_bar=True
     )
 
