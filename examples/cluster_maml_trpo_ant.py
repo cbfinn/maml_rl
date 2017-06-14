@@ -2,6 +2,7 @@ from sandbox.rocky.tf.algos.sensitive_trpo import SensitiveTRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.envs.mujoco.ant_env_rand import AntEnvRand
+from rllab.envs.mujoco.ant_env_rand_goal import AntEnvRandGoal
 from rllab.envs.mujoco.ant_env_rand_direc import AntEnvRandDirec
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import stub, run_experiment_lite
@@ -27,7 +28,7 @@ class VG(VariantGenerator):
 
     @variant
     def fast_batch_size(self):
-        return [10,20,40]
+        return [20]
 
     @variant
     def meta_batch_size(self):
@@ -38,8 +39,9 @@ class VG(VariantGenerator):
         return [1]
 
     @variant
-    def direc(self):  # fwd/bwd task or goal vel task
-        return [False, True]
+    def task_var(self):  # fwd/bwd task or goal vel task
+        # 0 for fwd/bwd, 1 for goal vel (kind of), 2 for goal pose
+        return [2]
 
     @variant
     def mask(self):  # whether or not to mask
@@ -54,13 +56,18 @@ num_grad_updates = 1
 use_sensitive=True
 
 for v in variants:
-    direc = v['direc']
+    task_var = v['task_var']
     mask = v['mask']
 
-    if direc:
+    if task_var == 0:
         env = TfEnv(normalize(AntEnvRandDirec()))
-    else:
+        task_var = 'direc'
+    elif task_var == 1:
         env = TfEnv(normalize(AntEnvRand()))
+        task_var = 'vel'
+    elif task_var == 2:
+        env = TfEnv(normalize(AntEnvRandGoal()))
+        task_var = 'pos'
     policy = SensitiveGaussianMLPPolicy(
         name="policy",
         env_spec=env.spec,
@@ -85,14 +92,16 @@ for v in variants:
         plot=False,
     )
     mask = 'mask' if mask else ''
-    direc = 'direc' if direc else ''
+
+    exp_name = 'maml_testing_parallel_sampler'
+    #exp_name = 'maml_timing'
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix='posticml_trpo_sensitive_ant' + direc + str(max_path_length),
-        exp_name=mask+'sens'+str(int(use_sensitive))+'_fbs'+str(v['fast_batch_size'])+'_mbs'+str(v['meta_batch_size'])+'_flr_' + str(v['fast_lr'])  + '_mlr' + str(v['meta_step_size']),
+        exp_prefix='posticml_trpo_sensitive_ant' + task_var + '_' + str(max_path_length),
+        exp_name=exp_name, #mask+'sens'+str(int(use_sensitive))+'_fbs'+str(v['fast_batch_size'])+'_mbs'+str(v['meta_batch_size'])+'_flr_' + str(v['fast_lr'])  + '_mlr' + str(v['meta_step_size']),
         # Number of parallel workers for sampling
-        n_parallel=1,
+        n_parallel=8,
         # Only keep the snapshot parameters for the last iteration
         snapshot_mode="gap",
         snapshot_gap=25,
@@ -100,8 +109,8 @@ for v in variants:
         # Specifies the seed for the experiment. If this is not provided, a random seed
         # will be used
         seed=v["seed"],
-        #mode="local",
-        mode="ec2",
+        mode="local",
+        #mode="ec2",
         variant=v,
         # plot=True,
         # terminate_machine=False,

@@ -5,6 +5,8 @@ from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.envs.mujoco.ant_env_rand import AntEnvRand
 from rllab.envs.mujoco.ant_env_rand_direc import AntEnvRandDirec
 from rllab.envs.mujoco.ant_env_direc_oracle import AntEnvDirecOracle
+from rllab.envs.mujoco.ant_env_rand_goal import AntEnvRandGoal
+from rllab.envs.mujoco.ant_env_rand_goal_oracle import AntEnvRandGoalOracle
 from rllab.envs.mujoco.ant_env_rand import AntEnvRand
 from rllab.envs.mujoco.ant_env_oracle import AntEnvOracle
 from rllab.envs.normalized_env import normalize
@@ -30,11 +32,12 @@ class VG(VariantGenerator):
     @variant
     def oracle(self):
         # oracle or baseline
-        return [False]
+        return [True]
 
     @variant
-    def direc(self):
-        return [False]
+    def task_var(self):  # fwd/bwd task or goal vel task
+        # 0 for fwd/bwd, 1 for goal vel (kind of), 2 for goal pose
+        return [2]
 
 # should also code up alternative KL thing
 
@@ -45,19 +48,30 @@ num_grad_updates = 1
 use_sensitive = True
 
 for v in variants:
-    direc = v['direc']
+    task_var = v['task_var']
     oracle = v['oracle']
 
-    if direc:
+    if task_var == 0:
+        task_var = 'direc'
+        exp_prefix = 'bugfix_trpo_sensitive_antdirec' + str(max_path_length)
         if oracle:
             env = TfEnv(normalize(AntEnvDirecOracle()))
         else:
             env = TfEnv(normalize(AntEnvRandDirec()))
-    else:
+    elif task_var == 1:
+        task_var = 'vel'
+        exp_prefix = 'posticml_trpo_sensitive_ant' + str(max_path_length)
         if oracle:
             env = TfEnv(normalize(AntEnvOracle()))
         else:
             env = TfEnv(normalize(AntEnvRand()))
+    elif task_var == 2:
+        task_var = 'pos'
+        exp_prefix = 'posticml_trpo_sensitive_antpos_' + str(max_path_length)
+        if oracle:
+            env = TfEnv(normalize(AntEnvRandGoalOracle()))
+        else:
+            env = TfEnv(normalize(AntEnvRandGoal()))
     policy = GaussianMLPPolicy(
         name="policy",
         env_spec=env.spec,
@@ -82,10 +96,8 @@ for v in variants:
         exp_name = 'oracleenv100traj'
     else:
         exp_name = 'randenv100traj'
-    if direc:
-        exp_prefix = 'bugfix_trpo_sensitive_antdirec' + str(max_path_length)
-    else:
-        exp_prefix = 'posticml_trpo_sensitive_ant' + str(max_path_length)
+
+    #exp_name = 'testing_parallel_sampler'
 
     run_experiment_lite(
         algo.train(),
@@ -93,7 +105,7 @@ for v in variants:
         exp_name=exp_name,
         #exp_name='sens'+str(int(use_sensitive))+'_fbs'+str(v['fast_batch_size'])+'_mbs'+str(v['meta_batch_size'])+'_flr_' + str(v['fast_lr'])  + '_mlr' + str(v['meta_step_size']),
         # Number of parallel workers for sampling
-        n_parallel=4,
+        n_parallel=8,
         # Only keep the snapshot parameters for the last iteration
         #snapshot_mode="last",
         snapshot_mode="gap",
@@ -102,8 +114,8 @@ for v in variants:
         # Specifies the seed for the experiment. If this is not provided, a random seed
         # will be used
         seed=v["seed"],
-        #mode="local",
-        mode="ec2",
+        mode="local",
+        #mode="ec2",
         #variant=v,
         # plot=True,
         # terminate_machine=False,
