@@ -1,4 +1,5 @@
 import matplotlib
+import os.path as osp
 matplotlib.use('Pdf')
 
 import time
@@ -135,14 +136,13 @@ class BatchSensitivePolopt(RLAlgorithm):
             self.init_opt()
             # initialize uninitialized vars  (only initialize vars that were not loaded)
             uninit_vars = []
-            for var in tf.all_variables():
+            for var in tf.global_variables():
                 # note - this is hacky, may be better way to do this in newer TF.
                 try:
                     sess.run(var)
                 except tf.errors.FailedPreconditionError:
                     uninit_vars.append(var)
-            sess.run(tf.initialize_variables(uninit_vars))
-
+            sess.run(tf.variables_initializer(uninit_vars))
 
             self.start_worker()
             start_time = time.time()
@@ -162,11 +162,11 @@ class BatchSensitivePolopt(RLAlgorithm):
                     for step in range(self.num_grad_updates+1):
                         logger.log('** Step ' + str(step) + ' **')
                         logger.log("Obtaining samples...")
-                        paths = self.obtain_samples(itr, reset_args=learner_env_goals)
+                        paths = self.obtain_samples(itr, reset_args=learner_env_goals)  ##CF not great that you have to pass here the resets
                         all_paths.append(paths)
                         logger.log("Processing samples...")
                         samples_data = {}
-                        for key in paths.keys():
+                        for key in paths.keys():  # the keys are the tasks
                             # don't log because this will spam the consol with every task.
                             samples_data[key] = self.process_samples(itr, paths[key], log=False)
                         all_samples_data.append(samples_data)
@@ -192,7 +192,6 @@ class BatchSensitivePolopt(RLAlgorithm):
                     logger.record_tabular('ItrTime', time.time() - itr_start_time)
 
                     # Below commented out code is useful for visualizing trajectories across a few different tasks.
-                    """
                     if itr % 2 == 0 and self.env.observation_space.shape[0] <= 4: # point-mass
                         logger.log("Saving visualization of paths")
                         import matplotlib.pyplot as plt;
@@ -223,7 +222,7 @@ class BatchSensitivePolopt(RLAlgorithm):
                             plt.xlim([-0.8, 0.8])
                             plt.ylim([-0.8, 0.8])
                             plt.legend(['goal', 'preupdate path', 'postupdate path'])
-                            plt.savefig('/home/cfinn/prepost_path'+str(ind)+'.png')
+                            plt.savefig(osp.join(logger.get_snapshot_dir(), 'prepost_path'+str(ind)+'.png'))
                     elif itr % 2 == 0:  # swimmer or cheetah
                         logger.log("Saving visualization of paths")
                         import matplotlib.pyplot as plt;
@@ -244,8 +243,7 @@ class BatchSensitivePolopt(RLAlgorithm):
                             plt.ylim([-1.0, 1.0])
 
                             plt.legend(['preupdate path', 'postupdate path'], loc=2)
-                            plt.savefig('/home/cfinn/swim1d_prepost_itr'+str(itr)+'_id'+str(ind)+'.pdf')
-                    """
+                            plt.savefig(osp.join(logger.get_snapshot_dir(), 'swim1d_prepost_itr'+str(itr)+'_id'+str(ind)+'.pdf'))
 
                     logger.dump_tabular(with_prefix=False)
                     #if self.plot:

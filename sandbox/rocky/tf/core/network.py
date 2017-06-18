@@ -408,7 +408,7 @@ class LSTMNetwork(object):
 
     @property
     def state_init_param(self):
-        return tf.concat(0, [self._hid_init_param, self._cell_init_param])
+        return tf.concat(axis=0, values=[self._hid_init_param, self._cell_init_param])
 
 
 class ConvMergeNetwork(LayersPowered, Serializable):

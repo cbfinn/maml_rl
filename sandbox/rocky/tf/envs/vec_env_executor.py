@@ -1,5 +1,3 @@
-
-
 import numpy as np
 import pickle as pickle
 from sandbox.rocky.tf.misc import tensor_utils
