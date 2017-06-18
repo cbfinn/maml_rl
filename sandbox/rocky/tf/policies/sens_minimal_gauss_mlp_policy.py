@@ -46,6 +46,8 @@ def _create_param(spec, shape, name, trainable=True, regularizable=True):
         regularizer = None
     else:
         regularizer = lambda _: tf.constant(0.)
+    # regularizer = None
+    # spec = tf_layers.xavier_initializer()
     return tf.get_variable(
         name=name, shape=shape, initializer=spec, trainable=trainable,
         regularizer=regularizer, dtype=tf.float32
@@ -60,7 +62,7 @@ def add_param(spec, shape, layer_name, name, weight_norm=None, variable_reuse=No
         raise NotImplementedError('Chelsea does not support this.')
     return param
 
-def make_dense_layer(input_shape, num_units, name='fc', W=L.XavierUniformInitializer(), b=tf.zeros_initializer, weight_norm=False, **kwargs):
+def make_dense_layer(input_shape, num_units, name='fc', W=tf_layers.xavier_initializer(), b=tf.zeros_initializer(), weight_norm=False, **kwargs):
     # make parameters
     num_inputs = int(np.prod(input_shape[1:]))
     W = add_param(W, (num_inputs, num_units), layer_name=name, name='W', weight_norm=weight_norm)
@@ -74,7 +76,7 @@ def forward_dense_layer(input, W, b, nonlinearity=tf.identity, batch_norm=False,
     if input.get_shape().ndims > 2:
         # if the input has more than two dimensions, flatten it into a
         # batch of feature vectors.
-        input = tf.reshape(input, tf.pack([tf.shape(input)[0], -1]))
+        input = tf.reshape(input, tf.stack([tf.shape(input)[0], -1]))
     activation = tf.matmul(input, W)
     if b is not None:
         activation = activation + tf.expand_dims(b, 0)
@@ -84,7 +86,7 @@ def forward_dense_layer(input, W, b, nonlinearity=tf.identity, batch_norm=False,
     else:
         return nonlinearity(activation)
 
-def make_param_layer(num_units, name='', param=tf.zeros_initializer, trainable=True):
+def make_param_layer(num_units, name='', param=tf.zeros_initializer(), trainable=True):
     param = add_param(param, (num_units,), layer_name=name, name='param', trainable=trainable)
     return param
 
@@ -93,7 +95,7 @@ def forward_param_layer(input, param):
     param = tf.convert_to_tensor(param)
     num_units = int(param.get_shape()[0])
     reshaped_param = tf.reshape(param, (1,)*(ndim-1)+(num_units,))
-    tile_arg = tf.concat(0, [tf.shape(input)[:ndim-1], [1]])
+    tile_arg = tf.concat([tf.shape(input)[:ndim-1], [1]], 0)
     tiled = tf.tile(reshaped_param, tile_arg)
     return tiled
 ### End Helper functions ###
@@ -156,7 +158,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
 
         # create network
         if mean_network is None:
-            self.all_params = self.create_MLP(
+            self.all_params = self.create_MLP(  # TODO: this should not be amethod of the policy! --> helper
                 name="mean_network",
                 output_dim=self.action_dim,
                 hidden_sizes=hidden_sizes,
@@ -227,7 +229,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
     def vectorized(self):
         return True
 
-    def set_init_surr_obj(self, input_list, surr_objs_tensor):
+    def set_init_surr_obj(self, input_list, surr_objs_tensor):  ##CF ??
         """ Set the surrogate objectives used the update the policy
         """
         self.input_list_for_grad = input_list
@@ -257,7 +259,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
             action_list.append(inputs[1])
             adv_list.append(inputs[2])
 
-        inputs = obs_list + action_list + adv_list
+        inputs = obs_list + action_list + adv_list  #CF what is the dif in format?
 
         # To do a second update, replace self.all_params below with the params that were used to collect the policy.
         init_param_values = None
@@ -279,15 +281,16 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
                     fast_params_tensor[k] = self.all_params[k]
                 self.all_fast_params_tensor.append(fast_params_tensor)
 
-        # pull new param vals out of tensorflow, so gradient computation only done once
+        # pull new param vals out of tensorflow, so gradient computation only done once ## first is the vars, second the values
+        # these are the updated values of the params after the gradient step
         self.all_param_vals = sess.run(self.all_fast_params_tensor, feed_dict=dict(list(zip(self.input_list_for_grad, inputs))))
 
         if init_param_values is not None:
             self.assign_params(self.all_params, init_param_values)
 
         outputs = []
-        self._cur_f_dist_i = {}
-        inputs = tf.split(0, num_tasks, self.input_tensor)
+        self._cur_f_dist_i = {}  #CF ??
+        inputs = tf.split(self.input_tensor, num_tasks, 0)
         for i in range(num_tasks):
             # TODO - use a placeholder to feed in the params, so that we don't have to recompile every time.
             task_inp = inputs[i]
@@ -302,7 +305,6 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         )
         total_time = time.time() - start
         logger.record_tabular("ComputeUpdatedDistTime", total_time)
-
 
     def get_variable_values(self, tensor_dict):
         sess = tf.get_default_session()
@@ -434,8 +436,8 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
 
     # This makes all of the parameters.
     def create_MLP(self, name, output_dim, hidden_sizes,
-                   hidden_W_init=L.XavierUniformInitializer(), hidden_b_init=tf.zeros_initializer,
-                   output_W_init=L.XavierUniformInitializer(), output_b_init=tf.zeros_initializer,
+                   hidden_W_init=tf_layers.xavier_initializer(), hidden_b_init=tf.zeros_initializer(),
+                   output_W_init=tf_layers.xavier_initializer(), output_b_init=tf.zeros_initializer(),
                    weight_normalization=False,
                    ):
         all_params = OrderedDict()
@@ -443,7 +445,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         cur_shape = self.input_shape
         with tf.variable_scope(name):
             if self.mask_units == True:
-                all_params['mask_units'] = add_param(tf.zeros_initializer, (cur_shape[1],), layer_name='mask_units', name='0', regularizable=False)
+                all_params['mask_units'] = add_param(tf.zeros_initializer(), (cur_shape[1],), layer_name='mask_units', name='0', regularizable=False)
                 cur_shape = (cur_shape[0], cur_shape[1]*2)
 
             for idx, hidden_size in enumerate(hidden_sizes):
@@ -484,7 +486,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
             if self.mask_units > 0:
                 # This is kind of hacky
                 mask_units = tf.zeros_like(l_hid) + all_params['mask_units']
-                l_hid = tf.concat(1, [l_hid, mask_units])
+                l_hid = tf.concat([l_hid, mask_units], 1)
 
             for idx in range(self.n_hidden):
                 l_hid = forward_dense_layer(l_hid, all_params['W'+str(idx)], all_params['b'+str(idx)],

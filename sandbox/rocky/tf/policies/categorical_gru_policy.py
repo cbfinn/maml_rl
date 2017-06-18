@@ -121,7 +121,7 @@ class CategoricalGRUPolicy(StochasticPolicy, LayersPowered, Serializable):
         obs_var = tf.cast(obs_var, tf.float32)
         if self.state_include_action:
             prev_action_var = tf.cast(state_info_vars["prev_action"], tf.float32)
-            all_input_var = tf.concat(2, [obs_var, prev_action_var])
+            all_input_var = tf.concat(axis=2, values=[obs_var, prev_action_var])
         else:
             all_input_var = obs_var
         if self.feature_network is None:

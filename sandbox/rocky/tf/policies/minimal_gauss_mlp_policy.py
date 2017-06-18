@@ -71,7 +71,7 @@ def forward_dense_layer(input, W, b, nonlinearity=tf.identity, batch_norm=False,
     if input.get_shape().ndims > 2:
         # if the input has more than two dimensions, flatten it into a
         # batch of feature vectors.
-        input = tf.reshape(input, tf.pack([tf.shape(input)[0], -1]))
+        input = tf.reshape(input, tf.stack([tf.shape(input)[0], -1]))
     activation = tf.matmul(input, W)
     if b is not None:
         activation = activation + tf.expand_dims(b, 0)
@@ -89,7 +89,7 @@ def forward_param_layer(input, param):
     ndim = input.get_shape().ndims
     num_units = int(param.get_shape()[0])
     reshaped_param = tf.reshape(param, (1,)*(ndim-1)+(num_units,))
-    tile_arg = tf.concat(0, [tf.shape(input)[:ndim-1], [1]])
+    tile_arg = tf.concat([tf.shape(input)[:ndim-1], [1]], 0)
     tiled = tf.tile(reshaped_param, tile_arg)
     return tiled
 ### End Helper functions ###

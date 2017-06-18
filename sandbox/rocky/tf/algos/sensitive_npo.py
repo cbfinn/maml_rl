@@ -62,7 +62,6 @@ class SensitiveNPO(BatchSensitivePolopt):
     def init_opt(self):
         is_recurrent = int(self.policy.recurrent)
         assert not is_recurrent  # not supported
-        state_info_vars, state_info_vars_list = {}, []
 
         dist = self.policy.distribution
 
@@ -83,7 +82,7 @@ class SensitiveNPO(BatchSensitivePolopt):
             surr_objs = []
 
             cur_params = new_params
-            new_params = []
+            new_params = []  # if there are several grad_updates the new_params are overwritten
             kls = []
 
             for i in range(self.meta_batch_size):
@@ -115,23 +114,22 @@ class SensitiveNPO(BatchSensitivePolopt):
         for i in range(self.meta_batch_size):
             dist_info_vars, _ = self.policy.updated_dist_info_sym(i, all_surr_objs[-1][i], obs_vars[i], params_dict=new_params[i])
 
-
-            if self.kl_constrain_step == -1:
+            if self.kl_constrain_step == -1:  # if we only care about the kl of the last step, the last item in kls will be the overall
                 kl = dist.kl_sym(old_dist_info_vars[i], dist_info_vars)
                 kls.append(kl)
             lr = dist.likelihood_ratio_sym(action_vars[i], old_dist_info_vars[i], dist_info_vars)
-            surr_objs.append( - tf.reduce_mean(lr*adv_vars[i]))
+            surr_objs.append(- tf.reduce_mean(lr*adv_vars[i]))
 
         if self.use_sensitive:
-            surr_obj = tf.reduce_mean(tf.pack(surr_objs, 0))
+            surr_obj = tf.reduce_mean(tf.stack(surr_objs, 0))  # mean over meta_batch_size (the diff tasks)
             input_list += obs_vars + action_vars + adv_vars + old_dist_info_vars_list
         else:
-            surr_obj = tf.reduce_mean(tf.pack(all_surr_objs[0], 0))
+            surr_obj = tf.reduce_mean(tf.stack(all_surr_objs[0], 0)) # if not meta, just use the first surr_obj
             input_list = init_input_list
 
         if self.use_sensitive:
-            mean_kl = tf.reduce_mean(tf.concat(0, kls))
-            max_kl = tf.reduce_max(tf.concat(0, kls))
+            mean_kl = tf.reduce_mean(tf.concat(kls, 0))  ##CF shouldn't this have the option of self.kl_constrain_step == -1?
+            max_kl = tf.reduce_max(tf.concat(kls, 0))
 
             self.optimizer.update_opt(
                 loss=surr_obj,
@@ -150,16 +148,15 @@ class SensitiveNPO(BatchSensitivePolopt):
 
     @overrides
     def optimize_policy(self, itr, all_samples_data):
-        assert len(all_samples_data) == self.num_grad_updates + 1
+        assert len(all_samples_data) == self.num_grad_updates + 1  # we collected the rollouts to compute the grads and then the test!
 
         if not self.use_sensitive:
             all_samples_data = [all_samples_data[0]]
 
         input_list = []
-        for step in range(len(all_samples_data)):
+        for step in range(len(all_samples_data)):  # these are the gradient steps
             obs_list, action_list, adv_list = [], [], []
             for i in range(self.meta_batch_size):
-
 
                 inputs = ext.extract(
                     all_samples_data[step][i],
@@ -168,9 +165,9 @@ class SensitiveNPO(BatchSensitivePolopt):
                 obs_list.append(inputs[0])
                 action_list.append(inputs[1])
                 adv_list.append(inputs[2])
-            input_list += obs_list + action_list + adv_list
+            input_list += obs_list + action_list + adv_list  # [ [obs_0], [act_0], [adv_0], [obs_1], ... ]
 
-            if step == 0:
+            if step == 0:  ##CF not used?
                 init_inputs = input_list
 
         if self.use_sensitive:
@@ -191,7 +188,7 @@ class SensitiveNPO(BatchSensitivePolopt):
         if self.use_sensitive:
             logger.log("Computing KL after")
             mean_kl = self.optimizer.constraint_val(input_list)
-            logger.record_tabular('MeanKLBefore', mean_kl_before)
+            logger.record_tabular('MeanKLBefore', mean_kl_before)  # this now won't be 0!
             logger.record_tabular('MeanKL', mean_kl)
         logger.record_tabular('LossBefore', loss_before)
         logger.record_tabular('LossAfter', loss_after)

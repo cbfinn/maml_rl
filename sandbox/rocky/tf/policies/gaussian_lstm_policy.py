@@ -142,7 +142,7 @@ class GaussianLSTMPolicy(StochasticPolicy, LayersPowered, Serializable):
         obs_var = tf.reshape(obs_var, tf.pack([n_batches, n_steps, -1]))
         if self.state_include_action:
             prev_action_var = state_info_vars["prev_action"]
-            all_input_var = tf.concat(2, [obs_var, prev_action_var])
+            all_input_var = tf.concat(axis=2, values=[obs_var, prev_action_var])
         else:
             all_input_var = obs_var
         if self.feature_network is None:

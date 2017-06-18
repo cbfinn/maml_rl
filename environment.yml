@@ -22,7 +22,7 @@ dependencies:
     - matplotlib
     - opencv3=3.1.0
     - scikit-learn
-    - tensorflow=0.12.0rc0
+    - tensorflow
     - pip:
         - Pillow
         - atari-py
