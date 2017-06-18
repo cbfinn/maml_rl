@@ -9,6 +9,7 @@ from sandbox.rocky.tf.policies.base import Policy
 import tensorflow as tf
 from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
 from sandbox.rocky.tf.samplers.vectorized_sampler import VectorizedSampler
+from sandbox.rocky.tf.spaces import Discrete
 
 import numpy as np
 
