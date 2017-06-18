@@ -39,7 +39,7 @@ class VectorizedSampler(BaseSampler):
         self.vec_env.terminate()
 
 
-    def obtain_samples(self, itr, reset_args=None, return_dict=False):
+    def obtain_samples(self, itr, reset_args=None, return_dict=False, log_prefix=''):
         # reset_args: arguments to pass to the environments to reset
         # return_dict: whether or not to return a dictionary or list form of paths
 
@@ -117,9 +117,9 @@ class VectorizedSampler(BaseSampler):
 
         pbar.stop()
 
-        logger.record_tabular("PolicyExecTime", policy_time)
-        logger.record_tabular("EnvExecTime", env_time)
-        logger.record_tabular("ProcessExecTime", process_time)
+        logger.record_tabular(log_prefix+"PolicyExecTime", policy_time)
+        logger.record_tabular(log_prefix+"EnvExecTime", env_time)
+        logger.record_tabular(log_prefix+"ProcessExecTime", process_time)
 
         if not return_dict:
             flatten_list = lambda l: [item for sublist in l for item in sublist]

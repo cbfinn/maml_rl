@@ -1,4 +1,5 @@
 import numpy as np
+from collections import OrderedDict
 
 from rllab.misc import ext
 #from sandbox.rocky.tf.core.parameterized import Parameterized
@@ -14,7 +15,9 @@ from rllab.misc.overrides import overrides
 from rllab.misc import logger
 from rllab.misc.tensor_utils import flatten_tensors, unflatten_tensors
 from sandbox.rocky.tf.misc import tensor_utils
+
 import itertools
+import time
 
 import tensorflow as tf
 from tensorflow.contrib.layers.python import layers as tf_layers
@@ -234,6 +237,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
     def compute_updated_dists(self, samples):
         """ Compute fast gradients once and pull them out of tensorflow for sampling.
         """
+        start = time.time()
         num_tasks = len(samples)
         param_keys = self.all_params.keys()
         if self.mask_units:
@@ -270,7 +274,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
             self.all_fast_params_tensor = []
             for i in range(num_tasks):
                 gradients = dict(zip(update_param_keys, tf.gradients(self.surr_objs[i], [self.all_params[key] for key in update_param_keys])))
-                fast_params_tensor = dict(zip(update_param_keys, [self.all_params[key] - step_size*gradients[key] for key in update_param_keys]))
+                fast_params_tensor = OrderedDict(zip(update_param_keys, [self.all_params[key] - step_size*gradients[key] for key in update_param_keys]))
                 for k in no_update_param_keys:
                     fast_params_tensor[k] = self.all_params[k]
                 self.all_fast_params_tensor.append(fast_params_tensor)
@@ -296,6 +300,8 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
             inputs = [self.input_tensor],
             outputs = outputs,
         )
+        total_time = time.time() - start
+        logger.record_tabular("ComputeUpdatedDistTime", total_time)
 
 
     def get_variable_values(self, tensor_dict):
@@ -365,7 +371,13 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
             update_param_keys = param_keys
             no_update_param_keys = []
 
-        gradients = dict(zip(update_param_keys, tf.gradients(surr_obj, [old_params_dict[key] for key in update_param_keys])))
+        #self.stop_grad = True  # TODO
+        self.stop_grad = False
+        grads = tf.gradients(surr_obj, [old_params_dict[key] for key in update_param_keys])
+        if self.stop_grad:
+            grads = [tf.stop_gradient(grad) for grad in grads]
+
+        gradients = dict(zip(update_param_keys, grads))
         params_dict = dict(zip(update_param_keys, [old_params_dict[key] - step_size*gradients[key] for key in update_param_keys]))
         for k in no_update_param_keys:
             params_dict[k] = old_params_dict[k]
@@ -426,7 +438,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
                    output_W_init=L.XavierUniformInitializer(), output_b_init=tf.zeros_initializer,
                    weight_normalization=False,
                    ):
-        all_params = {}
+        all_params = OrderedDict()
 
         cur_shape = self.input_shape
         with tf.variable_scope(name):

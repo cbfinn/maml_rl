@@ -81,9 +81,9 @@ class BatchPolopt(RLAlgorithm):
         self.fixed_horizon = fixed_horizon
         if sampler_cls is None:
             #if self.policy.vectorized and not force_batch_sampler:
-            sampler_cls = VectorizedSampler
+            #sampler_cls = VectorizedSampler
             #else:
-            #    sampler_cls = BatchSampler
+            sampler_cls = BatchSampler
         if sampler_args is None:
             sampler_args = dict()
         self.sampler = sampler_cls(self, **sampler_args)
@@ -143,9 +143,9 @@ class BatchPolopt(RLAlgorithm):
                     logger.record_tabular('Time', time.time() - start_time)
                     logger.record_tabular('ItrTime', time.time() - itr_start_time)
 
-                    import pickle
-                    with open('paths_itr'+str(itr)+'.pkl', 'wb') as f:
-                        pickle.dump(paths, f)
+                    #import pickle
+                    #with open('paths_itr'+str(itr)+'.pkl', 'wb') as f:
+                    #    pickle.dump(paths, f)
 
                     # debugging
                     """

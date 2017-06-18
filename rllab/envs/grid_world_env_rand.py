@@ -44,6 +44,9 @@ class GridWorldEnvRand(Env, Serializable):
         self.state = self.start_state
         return self.state
 
+    def sample_goals(self, num_goals):
+        return np.random.randint(4, size=(num_goals,))
+
     @staticmethod
     def action_from_direction(d):
         """

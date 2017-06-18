@@ -98,6 +98,7 @@ class BatchSensitivePolopt(RLAlgorithm):
 
         if sampler_cls is None:
             sampler_cls = VectorizedSampler
+            #sampler_cls = BatchSampler
         if sampler_args is None:
             sampler_args = dict()
         sampler_args['n_envs'] = self.meta_batch_size
@@ -112,11 +113,11 @@ class BatchSensitivePolopt(RLAlgorithm):
     def shutdown_worker(self):
         self.sampler.shutdown_worker()
 
-    def obtain_samples(self, itr, reset_args=None):
+    def obtain_samples(self, itr, reset_args=None, log_prefix=''):
         # This obtains samples using self.policy, and calling policy.get_actions(obses)
         # return_dict specifies how the samples should be returned (dict separates samples
         # by task)
-        paths = self.sampler.obtain_samples(itr, reset_args, return_dict=True)
+        paths = self.sampler.obtain_samples(itr, reset_args, return_dict=True, log_prefix=log_prefix)
         assert type(paths) == dict
         return paths
 
@@ -151,26 +152,11 @@ class BatchSensitivePolopt(RLAlgorithm):
                 itr_start_time = time.time()
                 with logger.prefix('itr #%d | ' % itr):
                     logger.log("Sampling set of tasks/goals for this meta-batch...")
-                    # TODO - this is a hacky way to specify tasks.
-                    if type(self.env.action_space) == Discrete:
-                        learner_env_goals = np.random.randint(4, size=(self.meta_batch_size,))
-                    elif self.env.observation_space.shape[0] <= 4:  # pointmass (oracle=4, normal=2)
-                        learner_env_goals = np.zeros((self.meta_batch_size, 2, ))
-                        # 2d
-                        learner_env_goals = np.random.uniform(-0.5, 0.5, size=(self.meta_batch_size, 2, ))
 
-                    elif self.env.spec.action_space.shape[0] == 8: # ant
-                        # 0.0 to 3.0 is what specifies the task -- goal vel ranges 0-3.0.
-                        # for fwd/bwd env, goal direc is backwards if < 1.5, forwards if > 1.5
-                        learner_env_goals = np.random.uniform(0.0, 3.0, (self.meta_batch_size, ))
-
-                    elif self.env.spec.action_space.shape[0] == 6: # cheetah
-                        # 0.0 to 2.0 is what specifies the task -- goal vel ranges 0-2.0.
-                        # for fwd/bwd env, goal direc is backwards if < 1.0, forwards if > 1.0
-                        learner_env_goals = np.random.uniform(0.0, 2.0, (self.meta_batch_size, ))
-
-                    else:
-                        raise NotImplementedError('unrecognized env')
+                    env = self.env
+                    while 'sample_goals' not in dir(env):
+                        env = env.wrapped_env
+                    learner_env_goals = env.sample_goals(self.meta_batch_size)
 
                     self.policy.switch_to_init_dist()  # Switch to pre-update policy
 
@@ -178,7 +164,7 @@ class BatchSensitivePolopt(RLAlgorithm):
                     for step in range(self.num_grad_updates+1):
                         logger.log('** Step ' + str(step) + ' **')
                         logger.log("Obtaining samples...")
-                        paths = self.obtain_samples(itr, reset_args=learner_env_goals)
+                        paths = self.obtain_samples(itr, reset_args=learner_env_goals, log_prefix=str(step))
                         all_paths.append(paths)
                         logger.log("Processing samples...")
                         samples_data = {}
