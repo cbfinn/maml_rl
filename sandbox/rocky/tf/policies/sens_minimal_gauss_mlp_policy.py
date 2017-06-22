@@ -121,6 +121,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
             std_parametrization='exp',
             grad_step_size=1.0,
             mask_units=False,
+            stop_grad=False,
     ):
         """
         :param env_spec:
@@ -140,6 +141,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
             - exp: the logarithm of the std will be stored, and applied a exponential transformation
             - softplus: the std will be computed as log(1+exp(x))
         :param grad_step_size: the step size taken in the learner's gradient update, sample uniformly if it is a range e.g. [0.1,1]
+        :param stop_grad: whether or not to stop the gradient through the gradient.
         :return:
         """
         Serializable.quick_init(self, locals())
@@ -153,6 +155,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         self.input_shape = (None, obs_dim,)
         self.step_size = grad_step_size
         self.mask_units=mask_units # mask_units doesn
+        self.stop_grad = stop_grad
         if type(self.step_size) == list:
             raise NotImplementedError('removing this since it didnt work well')
 
@@ -373,8 +376,6 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
             update_param_keys = param_keys
             no_update_param_keys = []
 
-        #self.stop_grad = True  # TODO
-        self.stop_grad = False
         grads = tf.gradients(surr_obj, [old_params_dict[key] for key in update_param_keys])
         if self.stop_grad:
             grads = [tf.stop_gradient(grad) for grad in grads]

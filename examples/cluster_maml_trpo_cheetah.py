@@ -29,7 +29,7 @@ class VG(VariantGenerator):
 
     @variant
     def fast_batch_size(self):
-        return [10, 20]  # #10, 20, 40
+        return [20]  # #10, 20, 40
 
     @variant
     def meta_batch_size(self):
@@ -41,11 +41,8 @@ class VG(VariantGenerator):
 
     @variant
     def direc(self):  # directionenv vs. goal velocity
-        return [False, True]
-
-    @variant
-    def mask(self):  # whether or not to mask
         return [False]
+
 
 # should also code up alternative KL thing
 
@@ -54,10 +51,10 @@ variants = VG().variants()
 max_path_length = 200
 num_grad_updates = 1
 use_sensitive=True
+stop_grad = False
 
 for v in variants:
     direc = v['direc']
-    mask = v['mask']
     learning_rate = v['meta_step_size']
 
     if direc:
@@ -70,7 +67,6 @@ for v in variants:
         grad_step_size=v['fast_lr'],
         hidden_nonlinearity=tf.nn.relu,
         hidden_sizes=(100,100),
-        mask_units=mask,
     )
 
     baseline = LinearFeatureBaseline(env_spec=env.spec)
@@ -87,19 +83,20 @@ for v in variants:
         step_size=v['meta_step_size'],
         plot=False,
     )
-    mask = 'mask' if mask else ''
     direc = 'direc' if direc else ''
+    stop_grad = '_stopgrad' if stop_grad else ''
 
     run_experiment_lite(
         algo.train(),
         exp_prefix='bugfix_trpo_sensitive_cheetah' + direc + str(max_path_length),
-        exp_name=mask+'sens'+str(int(use_sensitive))+'_fbs'+str(v['fast_batch_size'])+'_mbs'+str(v['meta_batch_size'])+'_flr_' + str(v['fast_lr'])  + '_mlr' + str(v['meta_step_size']),
+        exp_name='sens'+str(int(use_sensitive))+'_fbs'+str(v['fast_batch_size'])+'_mbs'+str(v['meta_batch_size'])+'_flr_' + str(v['fast_lr'])  + '_mlr' + str(v['meta_step_size']) + stop_grad,
         # Number of parallel workers for sampling
         n_parallel=1,
         # Only keep the snapshot parameters for the last iteration
         snapshot_mode="gap",
         snapshot_gap=25,
         sync_s3_pkl=True,
+        python_command='python3',
         # Specifies the seed for the experiment. If this is not provided, a random seed
         # will be used
         seed=v["seed"],
