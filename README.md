@@ -22,7 +22,6 @@ One current limitation of the code is that it is particularly slow. We welcome c
 ### Contact
 To ask questions or report issues, please open an issue on the [issues tracker](https://github.com/cbfinn/maml/issues).
 
-
 # rllab
 
 
@@ -31,7 +30,6 @@ To ask questions or report issues, please open an issue on the [issues tracker](
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/rllab/rllab/blob/master/LICENSE)
 [![Join the chat at https://gitter.im/rllab/rllab](https://badges.gitter.im/rllab/rllab.svg)](https://gitter.im/rllab/rllab?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-# rllab
 
 rllab is a framework for developing and evaluating reinforcement learning algorithms. It includes a wide range of continuous control tasks plus implementations of the following algorithms:
 
