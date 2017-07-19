@@ -18,83 +18,10 @@ import time
 
 import tensorflow as tf
 from tensorflow.contrib.layers.python import layers as tf_layers
+from sandbox.rocky.tf.core.utils import make_input, _create_param, add_param, make_dense_layer, forward_dense_layer, make_param_layer, forward_param_layer
 
 load_params = True
 
-
-### Start Helper functions ###
-# TODO - share these helpers between minimal and maml_minimal mlp policies
-def make_input(shape, input_var=None, name="input", **kwargs):
-    if input_var is None:
-        if name is not None:
-            with tf.variable_scope(name):
-                    input_var = tf.placeholder(tf.float32, shape=shape, name="input")
-        else:
-            input_var = tf.placeholder(tf.float32, shape=shape, name="input")
-    return input_var
-
-def _create_param(spec, shape, name, trainable=True, regularizable=True):
-    if not hasattr(spec, '__call__'):
-        assert isinstance(spec, (tf.Tensor, tf.Variable))
-        return spec
-    assert hasattr(spec, '__call__')
-    if regularizable:
-        regularizer = None
-    else:
-        regularizer = lambda _: tf.constant(0.)
-    # regularizer = None
-    # spec = tf_layers.xavier_initializer()
-    return tf.get_variable(
-        name=name, shape=shape, initializer=spec, trainable=trainable,
-        regularizer=regularizer, dtype=tf.float32
-    )
-
-def add_param(spec, shape, layer_name, name, weight_norm=None, variable_reuse=None, **tags):
-    with tf.variable_scope(layer_name, reuse=variable_reuse):
-        tags['trainable'] = tags.get('trainable', True)
-        tags['regularizable'] = tags.get('regularizable', True)
-        param = _create_param(spec, shape, name, **tags)
-    if weight_norm:
-        raise NotImplementedError('Chelsea does not support this.')
-    return param
-
-def make_dense_layer(input_shape, num_units, name='fc', W=tf_layers.xavier_initializer(), b=tf.zeros_initializer(), weight_norm=False, **kwargs):
-    # make parameters
-    num_inputs = int(np.prod(input_shape[1:]))
-    W = add_param(W, (num_inputs, num_units), layer_name=name, name='W', weight_norm=weight_norm)
-    if b is not None:
-        b = add_param(b, (num_units,), layer_name=name, name='b', regularizable=False, weight_norm=weight_norm)
-    output_shape = (input_shape[0], num_units)
-    return W,b, output_shape
-
-def forward_dense_layer(input, W, b, nonlinearity=tf.identity, batch_norm=False, scope='', reuse=True, is_training=False):
-    # compute output tensor
-    if input.get_shape().ndims > 2:
-        # if the input has more than two dimensions, flatten it into a
-        # batch of feature vectors.
-        input = tf.reshape(input, tf.stack([tf.shape(input)[0], -1]))
-    activation = tf.matmul(input, W)
-    if b is not None:
-        activation = activation + tf.expand_dims(b, 0)
-
-    if batch_norm:
-        return tf_layers.batch_norm(activation, activation_fn=nonlinearity, reuse=reuse, scope=scope, is_training=is_training)
-    else:
-        return nonlinearity(activation)
-
-def make_param_layer(num_units, name='', param=tf.zeros_initializer(), trainable=True):
-    param = add_param(param, (num_units,), layer_name=name, name='param', trainable=trainable)
-    return param
-
-def forward_param_layer(input, param):
-    ndim = input.get_shape().ndims
-    param = tf.convert_to_tensor(param)
-    num_units = int(param.get_shape()[0])
-    reshaped_param = tf.reshape(param, (1,)*(ndim-1)+(num_units,))
-    tile_arg = tf.concat([tf.shape(input)[:ndim-1], [1]], 0)
-    tiled = tf.tile(reshaped_param, tile_arg)
-    return tiled
-### End Helper functions ###
 
 
 class MAMLGaussianMLPPolicy(StochasticPolicy, Serializable):
@@ -155,7 +82,7 @@ class MAMLGaussianMLPPolicy(StochasticPolicy, Serializable):
 
         # create network
         if mean_network is None:
-            self.all_params = self.create_MLP(  # TODO: this should not be amethod of the policy! --> helper
+            self.all_params = self.create_MLP(  # TODO: this should not be a method of the policy! --> helper
                 name="mean_network",
                 output_dim=self.action_dim,
                 hidden_sizes=hidden_sizes,
@@ -166,13 +93,13 @@ class MAMLGaussianMLPPolicy(StochasticPolicy, Serializable):
             forward_mean = lambda x, params, is_train: self.forward_MLP('mean_network', params,
                 input_tensor=x, is_training=is_train)[1]
         else:
-            raise NotImplementedError('Chelsea does not support this.')
+            raise NotImplementedError('Not supported.')
 
         if std_network is not None:
-            raise NotImplementedError('Contained Gaussian MLP does not support this.')
+            raise NotImplementedError('Not supported.')
         else:
             if adaptive_std:
-                raise NotImplementedError('Chelsea does not support this.')
+                raise NotImplementedError('Not supported.')
             else:
                 if std_parametrization == 'exp':
                     init_std_param = np.log(init_std)
@@ -226,7 +153,7 @@ class MAMLGaussianMLPPolicy(StochasticPolicy, Serializable):
     def vectorized(self):
         return True
 
-    def set_init_surr_obj(self, input_list, surr_objs_tensor):  ##CF ??
+    def set_init_surr_obj(self, input_list, surr_objs_tensor):
         """ Set the surrogate objectives used the update the policy
         """
         self.input_list_for_grad = input_list
@@ -234,7 +161,7 @@ class MAMLGaussianMLPPolicy(StochasticPolicy, Serializable):
 
 
     def compute_updated_dists(self, samples):
-        """ Compute fast gradients once and pull them out of tensorflow for sampling.
+        """ Compute fast gradients once per iteration and pull them out of tensorflow for sampling with the post-update policy.
         """
         start = time.time()
         num_tasks = len(samples)
@@ -252,7 +179,7 @@ class MAMLGaussianMLPPolicy(StochasticPolicy, Serializable):
             action_list.append(inputs[1])
             adv_list.append(inputs[2])
 
-        inputs = obs_list + action_list + adv_list  #CF what is the dif in format?
+        inputs = obs_list + action_list + adv_list
 
         # To do a second update, replace self.all_params below with the params that were used to collect the policy.
         init_param_values = None
@@ -282,7 +209,7 @@ class MAMLGaussianMLPPolicy(StochasticPolicy, Serializable):
             self.assign_params(self.all_params, init_param_values)
 
         outputs = []
-        self._cur_f_dist_i = {}  #CF ??
+        self._cur_f_dist_i = {}
         inputs = tf.split(self.input_tensor, num_tasks, 0)
         for i in range(num_tasks):
             # TODO - use a placeholder to feed in the params, so that we don't have to recompile every time.
@@ -379,9 +306,7 @@ class MAMLGaussianMLPPolicy(StochasticPolicy, Serializable):
         # this function takes a numpy array observations and outputs randomly sampled actions.
         # idx: index corresponding to the task/updated policy.
         flat_obs = self.observation_space.flatten(observation)
-        # make sure cur_f_dist is init_f_dist. TODO TODO
-        #self._cur_f_dist = self._init_f_dist
-        f_dist = self._init_f_dist
+        f_dist = self._cur_f_dist
         mean, log_std = [x[0] for x in f_dist([flat_obs])]
         rnd = np.random.normal(size=mean.shape)
         action = rnd * np.exp(log_std) + mean
@@ -393,7 +318,8 @@ class MAMLGaussianMLPPolicy(StochasticPolicy, Serializable):
         flat_obs = self.observation_space.flatten_n(observations)
         result = self._cur_f_dist(flat_obs)
 
-        if len(result) == 2:  # TODO - this code assumes that there aren't 2 meta tasks in a batch
+        if len(result) == 2:
+            # NOTE - this code assumes that there aren't 2 meta tasks in a batch
             means, log_stds = result
         else:
             means = np.array([res[0] for res in result])[:,0,:]
@@ -413,7 +339,6 @@ class MAMLGaussianMLPPolicy(StochasticPolicy, Serializable):
         else:
             params = tf.global_variables()
 
-        # TODO - this is hacky...
         params = [p for p in params if p.name.startswith('mean_network') or p.name.startswith('output_std_param')]
         params = [p for p in params if 'Adam' not in p.name]
 

@@ -2,8 +2,8 @@ from sandbox.rocky.tf.algos.maml_trpo import MAMLTRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.baselines.zero_baseline import ZeroBaseline
-from examples.point_env_randgoal import PointEnvRandGoal
-from examples.point_env_randgoal_oracle import PointEnvRandGoalOracle
+from maml_examples.point_env_randgoal import PointEnvRandGoal
+from maml_examples.point_env_randgoal_oracle import PointEnvRandGoalOracle
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.rocky.tf.policies.maml_minimal_gauss_mlp_policy import MAMLGaussianMLPPolicy
@@ -58,7 +58,7 @@ for fast_learning_rate in fast_learning_rates:
             )
             run_experiment_lite(
                 algo.train(),
-                n_parallel=40,
+                n_parallel=1,
                 snapshot_mode="last",
                 python_command='python3',
                 seed=1,

@@ -1,5 +1,5 @@
-from examples.point_env_randgoal import PointEnvRandGoal
-from examples.point_env_randgoal_oracle import PointEnvRandGoalOracle
+from maml_examples.point_env_randgoal import PointEnvRandGoal
+from maml_examples.point_env_randgoal_oracle import PointEnvRandGoalOracle
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.mujoco.walker2d_env import Walker2DEnv
 from rllab.envs.normalized_env import normalize

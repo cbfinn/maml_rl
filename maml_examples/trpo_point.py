@@ -4,7 +4,7 @@ from sandbox.rocky.tf.algos.vpg import VPG
 from sandbox.rocky.tf.policies.minimal_gauss_mlp_policy import GaussianMLPPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
-from examples.point_env_randgoal_oracle import PointEnvRandGoalOracle
+from maml_examples.point_env_randgoal_oracle import PointEnvRandGoalOracle
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import stub, run_experiment_lite
 
