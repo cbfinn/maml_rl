@@ -393,7 +393,9 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         # this function takes a numpy array observations and outputs randomly sampled actions.
         # idx: index corresponding to the task/updated policy.
         flat_obs = self.observation_space.flatten(observation)
-        f_dist = self._cur_f_dist
+        # make sure cur_f_dist is init_f_dist. TODO TODO
+        #self._cur_f_dist = self._init_f_dist
+        f_dist = self._init_f_dist
         mean, log_std = [x[0] for x in f_dist([flat_obs])]
         rnd = np.random.normal(size=mean.shape)
         action = rnd * np.exp(log_std) + mean
@@ -423,7 +425,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         if tags.get('trainable', False):
             params = tf.trainable_variables()
         else:
-            params = tf.all_variables()
+            params = tf.global_variables()
 
         # TODO - this is hacky...
         params = [p for p in params if p.name.startswith('mean_network') or p.name.startswith('output_std_param')]
@@ -590,7 +592,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         Serializable.__setstate__(self, d)
         global load_params
         if load_params:
-            tf.get_default_session().run(tf.initialize_variables(self.get_params(all_params=True)))
+            tf.get_default_session().run(tf.variables_initializer(self.get_params(all_params=True)))
             self.set_param_values(d["params"], all_params=True)
 
 

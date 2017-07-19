@@ -23,13 +23,13 @@ class VecEnvExecutor(object):
             dones[self.ts >= self.max_path_length] = True
         for (i, done) in enumerate(dones):
             if done:
-                obs[i] = self.envs[i].reset(reset_args[i])
+                obs[i] = self.envs[i].reset(reset_args=reset_args[i])
                 self.ts[i] = 0
         return obs, rewards, dones, tensor_utils.stack_tensor_dict_list(env_infos)
 
     def reset(self, reset_args=None):
         if reset_args is not None:
-            results = [env.reset(arg) for env, arg in zip(self.envs, reset_args)]
+            results = [env.reset(reset_args=arg) for env, arg in zip(self.envs, reset_args)]
         else:
             results = [env.reset() for env in self.envs]
         self.ts[:] = 0

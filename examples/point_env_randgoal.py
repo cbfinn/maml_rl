@@ -42,7 +42,7 @@ class PointEnvRandGoal(Env):
         reward = - (x ** 2 + y ** 2) ** 0.5
         done = abs(x) < 0.01 and abs(y) < 0.01
         next_observation = np.copy(self._state)
-        return Step(observation=next_observation, reward=reward, done=done)
+        return Step(observation=next_observation, reward=reward, done=done, goal=self._goal)
 
     def render(self):
         print('current state:', self._state)

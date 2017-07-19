@@ -91,7 +91,7 @@ def _worker_set_env_params(G,params,scope=None):
 
 def _worker_collect_one_path(G, max_path_length, scope=None, reset_arg=None):
     G = _get_scoped_G(G, scope)
-    path = rollout(G.env, G.policy, max_path_length, reset_arg=None)
+    path = rollout(G.env, G.policy, max_path_length, reset_arg=reset_arg)
     return path, len(path["rewards"])
 
 
@@ -101,7 +101,9 @@ def sample_paths(
         max_path_length=np.inf,
         env_params=None,
         scope=None,
-        reset_arg=None):
+        reset_arg=None,
+        show_prog_bar=True,
+        multi_task=False):
     """
     :param policy_params: parameters for the policy. This will be updated on each worker process
     :param max_samples: desired maximum number of samples to be collected. The actual number of collected samples
@@ -110,21 +112,41 @@ def sample_paths(
     :param max_path_length: horizon / maximum length of a single trajectory
     :return: a list of collected paths
     """
-    singleton_pool.run_each(
-        _worker_set_policy_params,
-        [(policy_params, scope)] * singleton_pool.n_parallel
-    )
+    if multi_task:
+        assert len(policy_params) == singleton_pool.n_parallel
+        all_params = [(params, scope) for params in policy_params]
+        singleton_pool.run_each(
+            _worker_set_policy_params,
+            all_params,
+        )
+    else:
+        singleton_pool.run_each(
+            _worker_set_policy_params,
+            [(policy_params, scope)] * singleton_pool.n_parallel
+        )
     if env_params is not None:
         singleton_pool.run_each(
             _worker_set_env_params,
             [(env_params, scope)] * singleton_pool.n_parallel
         )
-    return singleton_pool.run_collect(
-        _worker_collect_one_path,
-        threshold=max_samples,
-        args=(max_path_length, scope, reset_arg),
-        show_prog_bar=True
-    )
+
+    if multi_task:
+        args = [(max_path_length, scope, arg) for arg in reset_arg]
+        return singleton_pool.run_collect(
+            _worker_collect_one_path,
+            threshold=max_samples,
+            args=args,
+            show_prog_bar=show_prog_bar,
+            multi_task=multi_task,
+        )
+    else:
+        return singleton_pool.run_collect(
+            _worker_collect_one_path,
+            threshold=max_samples,
+            args=(max_path_length, scope, reset_arg),
+            show_prog_bar=show_prog_bar,
+            multi_task=multi_task,
+        )
 
 
 def truncate_paths(paths, max_samples):

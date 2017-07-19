@@ -88,10 +88,11 @@ for v in variants:
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix='bugfix_trpo_sensitive_cheetah' + direc + str(max_path_length),
+        exp_prefix='debuging',
+        #exp_prefix='bugfix_trpo_sensitive_cheetah' + direc + str(max_path_length),
         exp_name='sens'+str(int(use_sensitive))+'_fbs'+str(v['fast_batch_size'])+'_mbs'+str(v['meta_batch_size'])+'_flr_' + str(v['fast_lr'])  + '_mlr' + str(v['meta_step_size']) + stop_grad,
         # Number of parallel workers for sampling
-        n_parallel=1,
+        n_parallel=8,
         # Only keep the snapshot parameters for the last iteration
         snapshot_mode="gap",
         snapshot_gap=25,

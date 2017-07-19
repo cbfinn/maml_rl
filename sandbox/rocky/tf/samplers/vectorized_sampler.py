@@ -117,6 +117,7 @@ class VectorizedSampler(BaseSampler):
             obses = next_obses
 
         pbar.stop()
+        import pdb; pdb.set_trace()
 
         logger.record_tabular(log_prefix+"PolicyExecTime", policy_time)
         logger.record_tabular(log_prefix+"EnvExecTime", env_time)

@@ -72,6 +72,7 @@ class StatefulPool(object):
             args_list = [tuple()] * self.n_parallel
         assert len(args_list) == self.n_parallel
         if self.n_parallel > 1:
+            #return [runner(self.G, *args_list[i]) for i in range(self.n_parallel)]
             results = self.pool.map_async(
                 _worker_run_each, [(runner, args) for args in args_list]
             )
@@ -99,7 +100,7 @@ class StatefulPool(object):
             for args in args_list:
                 yield runner(self.G, *args)
 
-    def run_collect(self, collect_once, threshold, args=None, show_prog_bar=True):
+    def run_collect(self, collect_once, threshold, args=None, show_prog_bar=True, multi_task=False):
         """
         Run the collector method using the worker pool. The collect_once method will receive 'G' as
         its first argument, followed by the provided args, if any. The method should return a pair of values.
@@ -119,7 +120,35 @@ class StatefulPool(object):
         """
         if args is None:
             args = tuple()
-        if self.pool:
+        if self.pool and multi_task:
+            manager = mp.Manager()
+            counter = manager.Value('i', 0)
+            lock = manager.RLock()
+
+            inputs = [(collect_once, counter, lock, threshold, arg) for arg in args]
+            results = self.pool.map_async(
+                _worker_run_collect,
+                inputs,
+            )
+            if show_prog_bar:
+                pbar = ProgBarCounter(threshold)
+            last_value = 0
+            while True:
+                time.sleep(0.1)
+                with lock:
+                    if counter.value >= threshold:
+                        if show_prog_bar:
+                            pbar.stop()
+                        break
+                    if show_prog_bar:
+                        pbar.inc(counter.value - last_value)
+                    last_value = counter.value
+            finished_results = results.get()
+            # TODO - for some reason this is buggy.
+            return {i:finished_results[i] for i in range(len(finished_results))}
+        elif multi_task:
+            assert False # not supported
+        elif self.pool:
             manager = mp.Manager()
             counter = manager.Value('i', 0)
             lock = manager.RLock()

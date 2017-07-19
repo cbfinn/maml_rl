@@ -11,6 +11,7 @@ import tensorflow as tf
 from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
 from sandbox.rocky.tf.samplers.vectorized_sampler import VectorizedSampler
 from sandbox.rocky.tf.spaces import Discrete
+from rllab.sampler.stateful_pool import singleton_pool
 
 import numpy as np
 
@@ -98,13 +99,14 @@ class BatchSensitivePolopt(RLAlgorithm):
         self.num_grad_updates = num_grad_updates # number of gradient steps during training
 
         if sampler_cls is None:
-            sampler_cls = VectorizedSampler
-            #sampler_cls = BatchSampler
+            if singleton_pool.n_parallel > 1:
+                sampler_cls = BatchSampler
+            else:
+                sampler_cls = VectorizedSampler
         if sampler_args is None:
             sampler_args = dict()
         sampler_args['n_envs'] = self.meta_batch_size
         self.sampler = sampler_cls(self, **sampler_args)
-        #self.init_opt()  # init_opt now happens in train()
 
     def start_worker(self):
         self.sampler.start_worker()
@@ -130,7 +132,6 @@ class BatchSensitivePolopt(RLAlgorithm):
         flatten_list = lambda l: [item for sublist in l for item in sublist]
 
         with tf.Session() as sess:
-
             # Code for loading a previous policy. Somewhat hacky because needs to be in sess.
             if self.load_policy is not None:
                 import joblib
@@ -162,6 +163,8 @@ class BatchSensitivePolopt(RLAlgorithm):
 
                     all_samples_data, all_paths = [], []
                     for step in range(self.num_grad_updates+1):
+                        #if step > 0:
+                        #    import pdb; pdb.set_trace() # test param_vals functions.
                         logger.log('** Step ' + str(step) + ' **')
                         logger.log("Obtaining samples...")
                         paths = self.obtain_samples(itr, reset_args=learner_env_goals, log_prefix=str(step))
