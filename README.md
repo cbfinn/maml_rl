@@ -1,3 +1,31 @@
+# Model-Agnostic Meta-Learning
+
+This repo contains code accompaning the paper, 	[Model-Agnostic Meta-Learning for Fast Adaptation of Deep Networks (Finn et al., ICML 2017)](https://arxiv.org/abs/1703.03400). It includes code for running the few-shot reinforcement learning experiments. 
+
+For the experiments in the supervised domain, see  [this codebase](https://github.com/cbfinn/maml).
+
+
+### Dependencies
+This code is based off of the rllab code repository and can be installed in the same way (see below). This codebase is not necessarily backwards compatible with rllab.
+
+The MAML code uses the TensorFlow rllab version, so be sure to install TensorFlow v1.0+.
+
+### Usage
+Scripts for running the experiments found in the paper are located in `maml_examples/`.
+
+The pointmass environment is located in `maml_examples/` whereas the MuJoCo environments are located in `rllab/envs/mujoco/`.
+
+### Speed of Code
+One current limitation of the code is that it is particularly slow. We welcome contributions to speed it up. We expect the biggest speed improvements to come from better parallelization of sampling and meta-learning graph computation.
+
+
+### Contact
+To ask questions or report issues, please open an issue on the [issues tracker](https://github.com/cbfinn/maml/issues).
+
+
+# rllab
+
+
 [![Docs](https://readthedocs.org/projects/rllab/badge)](http://rllab.readthedocs.org/en/latest/)
 [![Circle CI](https://circleci.com/gh/rllab/rllab.svg?style=shield)](https://circleci.com/gh/rllab/rllab)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/rllab/rllab/blob/master/LICENSE)
