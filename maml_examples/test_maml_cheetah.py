@@ -1,11 +1,10 @@
 from sandbox.rocky.tf.algos.vpg import VPG
 from sandbox.rocky.tf.algos.trpo import TRPO
-# from sandbox.rocky.tf.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from sandbox.rocky.tf.policies.minimal_gauss_mlp_policy import GaussianMLPPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
-from rllab.envs.mujoco.half_cheetah_env_rand_direc import HalfCheetahEnvRandDirec
-from rllab.envs.mujoco.half_cheetah_env_direc_oracle import HalfCheetahEnvDirecOracle
+from rllab.envs.mujoco.half_cheetah_env_rand import HalfCheetahEnvRand
+from rllab.envs.mujoco.half_cheetah_env_oracle import HalfCheetahEnvOracle
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import stub, run_experiment_lite
 
@@ -13,57 +12,47 @@ stub(globals())
 
 import joblib
 import numpy as np
-import os
 import pickle
 import tensorflow as tf
 
+file1 = 'data/s3/bugfix-trpo-maml-cheetah200/maml1_fbs10_mbs40_flr_0.1_mlr0.01/itr_475.pkl'
+file2 = 'data/s3/bugfix-trpo-maml-cheetah200/randenv/itr_475.pkl'
+file3 = 'data/s3/bugfix-trpo-maml-cheetah200/oracleenv/itr_975.pkl'
 
-# original ICML file:
-file1 = 'data/s3/bugfix-trpo-sensitive-cheetahdirec200/_sens1_fbs20_mbs40_flr_0.1_mlr0.02/itr_100.pkl'
-file2 = 'data/s3/bugfix-trpo-sensitive-cheetahdirec200/randenv/params.pkl'
-file3 = 'data/local/trpo-sensitive-cheetahdirec200/oracleenv/params.pkl'
-
-# for making the video, need a randomly initialized policy to load.
-rand_file = 'data/s3/bugfix-trpo-sensitive-cheetahdirec200/_sens1_fbs10_mbs20_flr_0.1_mlr0.01/itr_0.pkl'
-
-make_video = True # generate results if False, run code to make video if True
+make_video = False  # generate results if False, run code to make video if True
 run_id = 1  # for if you want to run this script in multiple terminals (need to have different ids)
 
 if not make_video:
     test_num_goals = 40
     np.random.seed(1)
-    goals = np.random.uniform(0.0, 2.0, size=(test_num_goals, ))
+    #goals = np.random.uniform(0.1, 0.8, size=(test_num_goals, )) # pre-ICML
+    goals = np.random.uniform(0.0, 2.0, size=(test_num_goals, ))  # post-ICML
 else:
-    np.random.seed(1)
+    np.random.seed(2)
     test_num_goals = 2
+    #goals = [0.1, 0.8]
     goals = [0.0, 2.0]
     file_ext = 'mp4'  # can be mp4 or gif
 print(goals)
 
-gen_name = 'icml_cheetahdirec_results_'
+gen_name = 'icml_cheetah_results_'
 names = ['maml','pretrain','random', 'oracle']
 exp_names = [gen_name + name for name in names]
 
-step_sizes = [0.1, 0.2, 1.0, 0.0]
+step_sizes = [0.1, 0.02, 0.1, 0.0]
 initial_params_files = [file1, file2, None, file3]
-
-names = ['random']
-exp_names = [gen_name + name for name in names]
-initial_params_files = [None]
-step_sizes = [0.5]
-
 
 all_avg_returns = []
 for step_i, initial_params_file in zip(range(len(step_sizes)), initial_params_files):
     avg_returns = []
-    for goal_i, goal in zip(range(len(goals)), goals):
+    for goal in goals:
 
 
         if initial_params_file is not None and 'oracle' in initial_params_file:
-            env = normalize(HalfCheetahEnvDirecOracle())
+            env = normalize(HalfCheetahEnvOracle())
             n_itr = 1
         else:
-            env = normalize(HalfCheetahEnvRandDirec())
+            env = normalize(HalfCheetahEnvRand())
             n_itr = 4
         env = TfEnv(env)
         policy = GaussianMLPPolicy(  # random policy
@@ -72,7 +61,6 @@ for step_i, initial_params_file in zip(range(len(step_sizes)), initial_params_fi
             hidden_nonlinearity=tf.nn.relu,
             hidden_sizes=(100, 100),
         )
-
 
         if initial_params_file is not None:
             policy = None
@@ -83,7 +71,7 @@ for step_i, initial_params_file in zip(range(len(step_sizes)), initial_params_fi
             policy=policy,
             load_policy=initial_params_file,
             baseline=baseline,
-            batch_size=4000,  # 2x
+            batch_size=4000,
             max_path_length=200,
             n_itr=n_itr,
             #step_size=10.0,
@@ -100,14 +88,14 @@ for step_i, initial_params_file in zip(range(len(step_sizes)), initial_params_fi
             snapshot_mode="all",
             # Specifies the seed for the experiment. If this is not provided, a random seed
             # will be used
-            seed=goal_i,
-            exp_prefix='cheetahdirec_test',
+            seed=2, #1  # don't set the seed for oracle, since it's already deterministic.
+            exp_prefix='cheetah_test',
             exp_name='test' + str(run_id),
             plot=True,
         )
         # get return from the experiment
         import csv
-        with open('data/local/cheetahdirec-test/test'+str(run_id)+'/progress.csv', 'r') as f:
+        with open('data/local/cheetah-test/test'+str(run_id)+'/progress.csv', 'r') as f:
             reader = csv.reader(f, delimiter=',')
             i = 0
             row = None
@@ -121,13 +109,12 @@ for step_i, initial_params_file in zip(range(len(step_sizes)), initial_params_fi
             avg_returns.append(returns)
 
         if make_video:
-            data_loc = 'data/local/cheetahdirec-test/test'+str(run_id)+'/'
-            save_loc = 'data/local/cheetahdirec-test/test/'
+            data_loc = 'data/local/cheetah-test/test'+str(run_id)+'/'
+            save_loc = 'data/local/cheetah-test/test/'
             param_file = initial_params_file
-            if param_file is None:
-                param_file = rand_file
             save_prefix = save_loc + names[step_i] + '_goal_' + str(goal)
             video_filename = save_prefix + 'prestep.' + file_ext
+            import os
             os.system('python scripts/sim_policy.py ' + param_file + ' --speedup=4 --max_path_length=500 --video_filename='+video_filename)
             for itr_i in range(3):
                 param_file = data_loc + 'itr_' + str(itr_i)  + '.pkl'
@@ -135,6 +122,7 @@ for step_i, initial_params_file in zip(range(len(step_sizes)), initial_params_fi
                 os.system('python scripts/sim_policy.py ' + param_file + ' --speedup=4 --max_path_length=500 --video_filename='+video_filename)
 
     all_avg_returns.append(avg_returns)
+
 
     task_avg_returns = []
     for itr in range(len(all_avg_returns[step_i][0])):

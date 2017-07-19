@@ -4,14 +4,14 @@
 from rllab.misc import ext
 from rllab.misc.overrides import overrides
 import rllab.misc.logger as logger
-from sandbox.rocky.tf.algos.batch_sensitive_polopt import BatchSensitivePolopt
+from sandbox.rocky.tf.algos.batch_maml_polopt import BatchMAMLPolopt
 from sandbox.rocky.tf.optimizers.penalty_lbfgs_optimizer import PenaltyLbfgsOptimizer
 from sandbox.rocky.tf.optimizers.first_order_optimizer import FirstOrderOptimizer
 from sandbox.rocky.tf.misc import tensor_utils
 import tensorflow as tf
 
 
-class SensitiveNPO(BatchSensitivePolopt):
+class MAMLNPO(BatchMAMLPolopt):
     """
     Natural Policy Optimization.
     """
@@ -21,14 +21,14 @@ class SensitiveNPO(BatchSensitivePolopt):
             optimizer=None,
             optimizer_args=None,
             step_size=0.01,
-            use_sensitive=True,
+            use_maml=True,
             **kwargs):
-        assert optimizer is not None  # only for use with Sensitive TRPO
+        assert optimizer is not None  # only for use with MAML TRPO
         if optimizer is None:
             if optimizer_args is None:
                 optimizer_args = dict()
             optimizer = PenaltyLbfgsOptimizer(**optimizer_args)
-        if not use_sensitive:
+        if not use_maml:
             default_args = dict(
                 batch_size=None,
                 max_epochs=1,
@@ -36,9 +36,9 @@ class SensitiveNPO(BatchSensitivePolopt):
             optimizer = FirstOrderOptimizer(**default_args)
         self.optimizer = optimizer
         self.step_size = step_size
-        self.use_sensitive = use_sensitive
+        self.use_maml = use_maml
         self.kl_constrain_step = -1  # needs to be 0 or -1 (original pol params, or new pol params)
-        super(SensitiveNPO, self).__init__(**kwargs)
+        super(MAMLNPO, self).__init__(**kwargs)
 
     def make_vars(self, stepnum='0'):
         # lists over the meta_batch_size
@@ -120,14 +120,14 @@ class SensitiveNPO(BatchSensitivePolopt):
             lr = dist.likelihood_ratio_sym(action_vars[i], old_dist_info_vars[i], dist_info_vars)
             surr_objs.append(- tf.reduce_mean(lr*adv_vars[i]))
 
-        if self.use_sensitive:
+        if self.use_maml:
             surr_obj = tf.reduce_mean(tf.stack(surr_objs, 0))  # mean over meta_batch_size (the diff tasks)
             input_list += obs_vars + action_vars + adv_vars + old_dist_info_vars_list
         else:
             surr_obj = tf.reduce_mean(tf.stack(all_surr_objs[0], 0)) # if not meta, just use the first surr_obj
             input_list = init_input_list
 
-        if self.use_sensitive:
+        if self.use_maml:
             mean_kl = tf.reduce_mean(tf.concat(kls, 0))  ##CF shouldn't this have the option of self.kl_constrain_step == -1?
             max_kl = tf.reduce_max(tf.concat(kls, 0))
 
@@ -150,7 +150,7 @@ class SensitiveNPO(BatchSensitivePolopt):
     def optimize_policy(self, itr, all_samples_data):
         assert len(all_samples_data) == self.num_grad_updates + 1  # we collected the rollouts to compute the grads and then the test!
 
-        if not self.use_sensitive:
+        if not self.use_maml:
             all_samples_data = [all_samples_data[0]]
 
         input_list = []
@@ -170,7 +170,7 @@ class SensitiveNPO(BatchSensitivePolopt):
             if step == 0:  ##CF not used?
                 init_inputs = input_list
 
-        if self.use_sensitive:
+        if self.use_maml:
             dist_info_list = []
             for i in range(self.meta_batch_size):
                 agent_infos = all_samples_data[self.kl_constrain_step][i]['agent_infos']
@@ -185,7 +185,7 @@ class SensitiveNPO(BatchSensitivePolopt):
         self.optimizer.optimize(input_list)
         logger.log("Computing loss after")
         loss_after = self.optimizer.loss(input_list)
-        if self.use_sensitive:
+        if self.use_maml:
             logger.log("Computing KL after")
             mean_kl = self.optimizer.constraint_val(input_list)
             logger.record_tabular('MeanKLBefore', mean_kl_before)  # this now won't be 0!

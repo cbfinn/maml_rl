@@ -17,7 +17,7 @@ tf_layers = None
 load_params = True
 
 ### Start Helper functions ###
-# TODO - share these helpers between minimal and sens_minimal mlp policies
+# TODO - share these helpers between minimal and maml_minimal mlp policies
 def make_input(shape, input_var=None, name="input", **kwargs):
     if input_var is None:
         if name is not None:

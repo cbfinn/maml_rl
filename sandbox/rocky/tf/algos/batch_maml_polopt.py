@@ -1,24 +1,24 @@
 import matplotlib
-import os.path as osp
 matplotlib.use('Pdf')
 
-import time
-from rllab.algos.base import RLAlgorithm
+import matplotlib.pyplot as plt
+import numpy as np
+import os.path as osp
 import rllab.misc.logger as logger
 import rllab.plotter as plotter
-from sandbox.rocky.tf.policies.base import Policy
 import tensorflow as tf
+import time
+
+from rllab.algos.base import RLAlgorithm
+from sandbox.rocky.tf.policies.base import Policy
 from sandbox.rocky.tf.samplers.batch_sampler import BatchSampler
 from sandbox.rocky.tf.samplers.vectorized_sampler import VectorizedSampler
 from sandbox.rocky.tf.spaces import Discrete
 from rllab.sampler.stateful_pool import singleton_pool
 
-import numpy as np
-
-
-class BatchSensitivePolopt(RLAlgorithm):
+class BatchMAMLPolopt(RLAlgorithm):
     """
-    Base class for batch sampling-based policy optimization methods, with sensitive learning.
+    Base class for batch sampling-based policy optimization methods, with maml.
     This includes various policy gradient methods like vpg, npg, ppo, trpo, etc.
     """
 
@@ -48,7 +48,7 @@ class BatchSensitivePolopt(RLAlgorithm):
             sampler_cls=None,
             sampler_args=None,
             force_batch_sampler=False,
-            use_sensitive=True,
+            use_maml=True,
             load_policy=None,
             **kwargs
     ):
@@ -196,10 +196,12 @@ class BatchSensitivePolopt(RLAlgorithm):
                     logger.record_tabular('Time', time.time() - start_time)
                     logger.record_tabular('ItrTime', time.time() - itr_start_time)
 
-                    # Below commented out code is useful for visualizing trajectories across a few different tasks.
-                    if itr % 2 == 0 and self.env.observation_space.shape[0] <= 4: # point-mass
+                    logger.dump_tabular(with_prefix=False)
+
+                    # The rest is some example plotting code.
+                    # Plotting code is useful for visualizing trajectories across a few different tasks.
+                    if False and itr % 2 == 0 and self.env.observation_space.shape[0] <= 4: # point-mass
                         logger.log("Saving visualization of paths")
-                        import matplotlib.pyplot as plt;
                         for ind in range(min(5, self.meta_batch_size)):
                             plt.clf()
                             plt.plot(learner_env_goals[ind][0], learner_env_goals[ind][1], 'k*', markersize=10)
@@ -228,15 +230,13 @@ class BatchSensitivePolopt(RLAlgorithm):
                             plt.ylim([-0.8, 0.8])
                             plt.legend(['goal', 'preupdate path', 'postupdate path'])
                             plt.savefig(osp.join(logger.get_snapshot_dir(), 'prepost_path'+str(ind)+'.png'))
-                    elif itr % 2 == 0:  # swimmer or cheetah
+                    elif False and itr % 2 == 0:  # swimmer or cheetah
                         logger.log("Saving visualization of paths")
-                        import matplotlib.pyplot as plt;
                         for ind in range(min(5, self.meta_batch_size)):
                             plt.clf()
                             goal_vel = learner_env_goals[ind]
                             plt.title('Swimmer paths, goal vel='+str(goal_vel))
                             plt.hold(True)
-
 
                             prepathobs = all_paths[0][ind][0]['observations']
                             postpathobs = all_paths[-1][ind][0]['observations']
@@ -249,13 +249,6 @@ class BatchSensitivePolopt(RLAlgorithm):
 
                             plt.legend(['preupdate path', 'postupdate path'], loc=2)
                             plt.savefig(osp.join(logger.get_snapshot_dir(), 'swim1d_prepost_itr'+str(itr)+'_id'+str(ind)+'.pdf'))
-
-                    logger.dump_tabular(with_prefix=False)
-                    #if self.plot:
-                    #    self.update_plot()
-                    #    if self.pause_for_plot:
-                    #        input("Plotting evaluation run: Press Enter to "
-                    #              "continue...")
         self.shutdown_worker()
 
     def log_diagnostics(self, paths, prefix):

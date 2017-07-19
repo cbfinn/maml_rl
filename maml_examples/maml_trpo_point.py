@@ -1,4 +1,4 @@
-from sandbox.rocky.tf.algos.sensitive_trpo import SensitiveTRPO
+from sandbox.rocky.tf.algos.maml_trpo import MAMLTRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
 from rllab.baselines.zero_baseline import ZeroBaseline
@@ -6,15 +6,13 @@ from examples.point_env_randgoal import PointEnvRandGoal
 from examples.point_env_randgoal_oracle import PointEnvRandGoalOracle
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import stub, run_experiment_lite
-#from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
-from sandbox.rocky.tf.policies.sens_minimal_gauss_mlp_policy import SensitiveGaussianMLPPolicy
+from sandbox.rocky.tf.policies.sens_minimal_gauss_mlp_policy import MAMLGaussianMLPPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
 
 import tensorflow as tf
 
 
-# 1e-3 for sensitive, 1e-2 for oracle, non-sensitive [is this still true?]
-learning_rates = [1e-2]  # 1e-3 works well for 1 step, trying lower for 2 step, trying 1e-2 for large batch
+learning_rates = [1e-2]
 
 fast_learning_rates = [0.5]
 baselines = ['linear']
@@ -24,7 +22,7 @@ max_path_length = 100
 num_grad_updates = 1
 meta_step_size = 0.01
 
-use_sensitive = True
+use_maml = True
 
 for fast_learning_rate in fast_learning_rates:
     for learning_rate in learning_rates:
@@ -32,7 +30,7 @@ for fast_learning_rate in fast_learning_rates:
             stub(globals())
 
             env = TfEnv(normalize(PointEnvRandGoal()))
-            policy = SensitiveGaussianMLPPolicy(
+            policy = MAMLGaussianMLPPolicy(
                 name="policy",
                 env_spec=env.spec,
                 grad_step_size=fast_learning_rate,
@@ -45,7 +43,7 @@ for fast_learning_rate in fast_learning_rates:
                 baseline = LinearFeatureBaseline(env_spec=env.spec)
             else:
                 baseline = GaussianMLPBaseline(env_spec=env.spec)
-            algo = SensitiveTRPO(
+            algo = MAMLTRPO(
                 env=env,
                 policy=policy,
                 baseline=baseline,
@@ -54,7 +52,7 @@ for fast_learning_rate in fast_learning_rates:
                 meta_batch_size=meta_batch_size,
                 num_grad_updates=num_grad_updates,
                 n_itr=100,
-                use_sensitive=use_sensitive,
+                use_maml=use_maml,
                 step_size=meta_step_size,
                 plot=False,
             )
@@ -64,7 +62,7 @@ for fast_learning_rate in fast_learning_rates:
                 snapshot_mode="last",
                 python_command='python3',
                 seed=1,
-                exp_prefix='vpg_sensitive_point100',
-                exp_name='trposens'+str(int(use_sensitive))+'_fbs'+str(fast_batch_size)+'_mbs'+str(meta_batch_size)+'_flr_' + str(fast_learning_rate) + 'metalr_' + str(meta_step_size) +'_step1'+str(num_grad_updates),
+                exp_prefix='vpg_maml_point100',
+                exp_name='trposens'+str(int(use_maml))+'_fbs'+str(fast_batch_size)+'_mbs'+str(meta_batch_size)+'_flr_' + str(fast_learning_rate) + 'metalr_' + str(meta_step_size) +'_step1'+str(num_grad_updates),
                 plot=False,
             )

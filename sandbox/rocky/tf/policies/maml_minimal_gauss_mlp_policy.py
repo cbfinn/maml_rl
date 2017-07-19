@@ -2,10 +2,7 @@ import numpy as np
 from collections import OrderedDict
 
 from rllab.misc import ext
-#from sandbox.rocky.tf.core.parameterized import Parameterized
-#from sandbox.rocky.tf.core.layers_powered import LayersPowered
 import sandbox.rocky.tf.core.layers as L
-#from sandbox.rocky.tf.core.network import MLP
 from sandbox.rocky.tf.spaces.box import Box
 
 from rllab.core.serializable import Serializable
@@ -22,12 +19,11 @@ import time
 import tensorflow as tf
 from tensorflow.contrib.layers.python import layers as tf_layers
 
-# TODO - what does this mean in rllab?
 load_params = True
 
 
 ### Start Helper functions ###
-# TODO - share these helpers between minimal and sens_minimal mlp policies
+# TODO - share these helpers between minimal and maml_minimal mlp policies
 def make_input(shape, input_var=None, name="input", **kwargs):
     if input_var is None:
         if name is not None:
@@ -101,7 +97,7 @@ def forward_param_layer(input, param):
 ### End Helper functions ###
 
 
-class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
+class MAMLGaussianMLPPolicy(StochasticPolicy, Serializable):
     def __init__(
             self,
             name,
@@ -120,7 +116,6 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
             std_network=None,
             std_parametrization='exp',
             grad_step_size=1.0,
-            mask_units=False,
             stop_grad=False,
     ):
         """
@@ -154,7 +149,6 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         self.output_nonlinearity = output_nonlinearity
         self.input_shape = (None, obs_dim,)
         self.step_size = grad_step_size
-        self.mask_units=mask_units # mask_units doesn
         self.stop_grad = stop_grad
         if type(self.step_size) == list:
             raise NotImplementedError('removing this since it didnt work well')
@@ -214,7 +208,7 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
 
             self._cached_params = {}
 
-            super(SensitiveGaussianMLPPolicy, self).__init__(env_spec)
+            super(MAMLGaussianMLPPolicy, self).__init__(env_spec)
 
             dist_info_sym = self.dist_info_sym(self.input_tensor, dict(), is_training=False)
             mean_var = dist_info_sym["mean"]
@@ -245,12 +239,8 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         start = time.time()
         num_tasks = len(samples)
         param_keys = self.all_params.keys()
-        if self.mask_units:
-            update_param_keys = ['mask_units']
-            no_update_param_keys = [k for k in param_keys if 'mask_units'!=k]
-        else:
-            update_param_keys = param_keys
-            no_update_param_keys = []
+        update_param_keys = param_keys
+        no_update_param_keys = []
 
         sess = tf.get_default_session()
 
@@ -369,12 +359,8 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         if old_params_dict == None:
             old_params_dict = self.all_params
         param_keys = self.all_params.keys()
-        if self.mask_units:
-            update_param_keys = ['mask_units']
-            no_update_param_keys = [k for k in param_keys if 'mask_units'!=k]
-        else:
-            update_param_keys = param_keys
-            no_update_param_keys = []
+        update_param_keys = param_keys
+        no_update_param_keys = []
 
         grads = tf.gradients(surr_obj, [old_params_dict[key] for key in update_param_keys])
         if self.stop_grad:
@@ -431,9 +417,6 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
         params = [p for p in params if p.name.startswith('mean_network') or p.name.startswith('output_std_param')]
         params = [p for p in params if 'Adam' not in p.name]
 
-        if self.mask_units and not all_params:
-            params = [p for p in params if 'mask' in p.name]  # the trainable variables for test time.
-
         return params
 
 
@@ -447,10 +430,6 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
 
         cur_shape = self.input_shape
         with tf.variable_scope(name):
-            if self.mask_units == True:
-                all_params['mask_units'] = add_param(tf.zeros_initializer(), (cur_shape[1],), layer_name='mask_units', name='0', regularizable=False)
-                cur_shape = (cur_shape[0], cur_shape[1]*2)
-
             for idx, hidden_size in enumerate(hidden_sizes):
                 W, b, cur_shape = make_dense_layer(
                     cur_shape,
@@ -486,10 +465,6 @@ class SensitiveGaussianMLPPolicy(StochasticPolicy, Serializable):
                 l_in = input_tensor
 
             l_hid = l_in
-            if self.mask_units > 0:
-                # This is kind of hacky
-                mask_units = tf.zeros_like(l_hid) + all_params['mask_units']
-                l_hid = tf.concat([l_hid, mask_units], 1)
 
             for idx in range(self.n_hidden):
                 l_hid = forward_dense_layer(l_hid, all_params['W'+str(idx)], all_params['b'+str(idx)],

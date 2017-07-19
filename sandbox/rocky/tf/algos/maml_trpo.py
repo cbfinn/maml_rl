@@ -1,10 +1,10 @@
 
 
-from sandbox.rocky.tf.algos.sensitive_npo import SensitiveNPO
+from sandbox.rocky.tf.algos.maml_npo import MAMLNPO
 from sandbox.rocky.tf.optimizers.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 
 
-class SensitiveTRPO(SensitiveNPO):
+class MAMLTRPO(MAMLNPO):
     """
     Trust Region Policy Optimization
     """
@@ -18,4 +18,4 @@ class SensitiveTRPO(SensitiveNPO):
             if optimizer_args is None:
                 optimizer_args = dict()
             optimizer = ConjugateGradientOptimizer(**optimizer_args)
-        super(SensitiveTRPO, self).__init__(optimizer=optimizer, **kwargs)
+        super(MAMLTRPO, self).__init__(optimizer=optimizer, **kwargs)

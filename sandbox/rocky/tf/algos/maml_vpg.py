@@ -3,14 +3,14 @@
 from rllab.misc import logger
 from rllab.misc import ext
 from rllab.misc.overrides import overrides
-from sandbox.rocky.tf.algos.batch_sensitive_polopt import BatchSensitivePolopt
+from sandbox.rocky.tf.algos.batch_maml_polopt import BatchMAMLPolopt
 from sandbox.rocky.tf.optimizers.first_order_optimizer import FirstOrderOptimizer
 from sandbox.rocky.tf.misc import tensor_utils
 from rllab.core.serializable import Serializable
 import tensorflow as tf
 
 
-class SensitiveVPG(BatchSensitivePolopt, Serializable):
+class MAMLVPG(BatchMAMLPolopt, Serializable):
     """
     Vanilla Policy Gradient.
     """
@@ -22,7 +22,7 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
             baseline,
             optimizer=None,
             optimizer_args=None,
-            use_sensitive=True,
+            use_maml=True,
             **kwargs):
         Serializable.quick_init(self, locals())
         if optimizer is None:
@@ -37,8 +37,8 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
             optimizer = FirstOrderOptimizer(**optimizer_args)
         self.optimizer = optimizer
         self.opt_info = None
-        self.use_sensitive = use_sensitive
-        super(SensitiveVPG, self).__init__(env=env, policy=policy, baseline=baseline, use_sensitive=use_sensitive, **kwargs)
+        self.use_maml = use_maml
+        super(MAMLVPG, self).__init__(env=env, policy=policy, baseline=baseline, use_maml=use_maml, **kwargs)
 
 
     def make_vars(self, stepnum='0'):
@@ -63,7 +63,7 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
     @overrides
     def init_opt(self):
         # TODO Commented out all KL stuff for now, since it is only used for logging
-        # To see how it can be turned on, see sensitive_npo.py
+        # To see how it can be turned on, see maml_npo.py
         is_recurrent = int(self.policy.recurrent)
         assert not is_recurrent # not supported right now.
         dist = self.policy.distribution
@@ -124,7 +124,7 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
         max_kl = tf.reduce_max(tf.concat(kls, 0))
         input_list += obs_vars + action_vars + adv_vars
 
-        if self.use_sensitive:
+        if self.use_maml:
             self.optimizer.update_opt(loss=surr_obj, target=self.policy, inputs=input_list)
         else:  # baseline method of just training initial policy
             self.optimizer.update_opt(loss=tf.reduce_mean(tf.stack(all_surr_objs[0],0)), target=self.policy, inputs=init_input_list)
@@ -151,7 +151,7 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
         logger.log("optimizing policy")
         assert len(all_samples_data) == self.num_grad_updates + 1
 
-        if not self.use_sensitive:
+        if not self.use_maml:
             all_samples_data = [all_samples_data[0]]
 
         input_list = []
@@ -182,7 +182,7 @@ class SensitiveVPG(BatchSensitivePolopt, Serializable):
         for i in range(self.meta_batch_size):
             agent_infos = all_samples_data[-1][i]['agent_infos']
             dist_info_list += [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
-        if self.use_sensitive:
+        if self.use_maml:
             mean_kl, max_kl = self.opt_info['f_kl'](*(list(input_list) + dist_info_list))
             logger.record_tabular('MeanKL', mean_kl)
             logger.record_tabular('MaxKL', max_kl)

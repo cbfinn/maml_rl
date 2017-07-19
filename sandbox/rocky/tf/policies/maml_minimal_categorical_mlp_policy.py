@@ -19,7 +19,7 @@ tf_layers = None
 load_params = True
 
 ### Start Helper functions ###
-# TODO - share these helpers between minimal and sens_minimal mlp policies
+# TODO - share these helpers between minimal and maml_minimal mlp policies
 def make_input(shape, input_var=None, name="input", **kwargs):
     if input_var is None:
         if name is not None:
@@ -99,7 +99,7 @@ def suppress_params_loading():
 
 
 
-class SensitiveCategoricalMLPPolicy(StochasticPolicy, Serializable):
+class MAMLCategoricalMLPPolicy(StochasticPolicy, Serializable):
     def __init__(
             self,
             name,
@@ -152,7 +152,7 @@ class SensitiveCategoricalMLPPolicy(StochasticPolicy, Serializable):
 
         self._dist = Categorical(self.action_dim)
         self._cached_params = {}
-        super(SensitiveCategoricalMLPPolicy, self).__init__(env_spec)
+        super(MAMLCategoricalMLPPolicy, self).__init__(env_spec)
 
 
     @property

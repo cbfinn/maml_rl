@@ -1,13 +1,12 @@
-
-from sandbox.rocky.tf.algos.sensitive_trpo import SensitiveTRPO
+from sandbox.rocky.tf.algos.maml_trpo import MAMLTRPO
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
-from rllab.envs.mujoco.half_cheetah_env_rand import HalfCheetahEnvRand
-from rllab.envs.mujoco.half_cheetah_env_rand_direc import HalfCheetahEnvRandDirec
+from rllab.envs.mujoco.ant_env_rand import AntEnvRand
+from rllab.envs.mujoco.ant_env_rand_goal import AntEnvRandGoal
+from rllab.envs.mujoco.ant_env_rand_direc import AntEnvRandDirec
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import stub, run_experiment_lite
-#from rllab.policies.gaussian_mlp_policy import GaussianMLPPolicy
-from sandbox.rocky.tf.policies.sens_minimal_gauss_mlp_policy import SensitiveGaussianMLPPolicy
+from sandbox.rocky.tf.policies.maml_minimal_gauss_mlp_policy import MAMLGaussianMLPPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
 
 import tensorflow as tf
@@ -25,11 +24,11 @@ class VG(VariantGenerator):
 
     @variant
     def meta_step_size(self):
-        return [0.01]
+        return [0.01] # sometimes 0.02 better
 
     @variant
     def fast_batch_size(self):
-        return [20]  # #10, 20, 40
+        return [20]
 
     @variant
     def meta_batch_size(self):
@@ -40,8 +39,9 @@ class VG(VariantGenerator):
         return [1]
 
     @variant
-    def direc(self):  # directionenv vs. goal velocity
-        return [False]
+    def task_var(self):  # fwd/bwd task or goal vel task
+        # 0 for fwd/bwd, 1 for goal vel (kind of), 2 for goal pose
+        return [2]
 
 
 # should also code up alternative KL thing
@@ -50,18 +50,21 @@ variants = VG().variants()
 
 max_path_length = 200
 num_grad_updates = 1
-use_sensitive=True
-stop_grad = False
+use_maml=True
 
 for v in variants:
-    direc = v['direc']
-    learning_rate = v['meta_step_size']
+    task_var = v['task_var']
 
-    if direc:
-        env = TfEnv(normalize(HalfCheetahEnvRandDirec()))
-    else:
-        env = TfEnv(normalize(HalfCheetahEnvRand()))
-    policy = SensitiveGaussianMLPPolicy(
+    if task_var == 0:
+        env = TfEnv(normalize(AntEnvRandDirec()))
+        task_var = 'direc'
+    elif task_var == 1:
+        env = TfEnv(normalize(AntEnvRand()))
+        task_var = 'vel'
+    elif task_var == 2:
+        env = TfEnv(normalize(AntEnvRandGoal()))
+        task_var = 'pos'
+    policy = MAMLGaussianMLPPolicy(
         name="policy",
         env_spec=env.spec,
         grad_step_size=v['fast_lr'],
@@ -70,7 +73,7 @@ for v in variants:
     )
 
     baseline = LinearFeatureBaseline(env_spec=env.spec)
-    algo = SensitiveTRPO(
+    algo = MAMLTRPO(
         env=env,
         policy=policy,
         baseline=baseline,
@@ -79,25 +82,21 @@ for v in variants:
         meta_batch_size=v['meta_batch_size'],
         num_grad_updates=num_grad_updates,
         n_itr=800,
-        use_sensitive=use_sensitive,
+        use_maml=use_maml,
         step_size=v['meta_step_size'],
         plot=False,
     )
-    direc = 'direc' if direc else ''
-    stop_grad = '_stopgrad' if stop_grad else ''
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix='debuging',
-        #exp_prefix='bugfix_trpo_sensitive_cheetah' + direc + str(max_path_length),
-        exp_name='sens'+str(int(use_sensitive))+'_fbs'+str(v['fast_batch_size'])+'_mbs'+str(v['meta_batch_size'])+'_flr_' + str(v['fast_lr'])  + '_mlr' + str(v['meta_step_size']) + stop_grad,
+        exp_prefix='posticml_trpo_maml_ant' + task_var + '_' + str(max_path_length),
+        exp_name='maml'+str(int(use_maml))+'_fbs'+str(v['fast_batch_size'])+'_mbs'+str(v['meta_batch_size'])+'_flr_' + str(v['fast_lr'])  + '_mlr' + str(v['meta_step_size']),
         # Number of parallel workers for sampling
         n_parallel=8,
         # Only keep the snapshot parameters for the last iteration
         snapshot_mode="gap",
         snapshot_gap=25,
         sync_s3_pkl=True,
-        python_command='python3',
         # Specifies the seed for the experiment. If this is not provided, a random seed
         # will be used
         seed=v["seed"],

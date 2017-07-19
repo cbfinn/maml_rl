@@ -11,7 +11,7 @@ from rllab.envs.mujoco.ant_env_rand import AntEnvRand
 from rllab.envs.mujoco.ant_env_oracle import AntEnvOracle
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import stub, run_experiment_lite
-from sandbox.rocky.tf.policies.sens_minimal_gauss_mlp_policy import SensitiveGaussianMLPPolicy
+from sandbox.rocky.tf.policies.maml_minimal_gauss_mlp_policy import MAMLGaussianMLPPolicy
 from sandbox.rocky.tf.policies.minimal_gauss_mlp_policy import GaussianMLPPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
 
@@ -45,7 +45,7 @@ variants = VG().variants()
 
 max_path_length = 200
 num_grad_updates = 1
-use_sensitive = True
+use_maml = True
 
 for v in variants:
     task_var = v['task_var']
@@ -53,21 +53,21 @@ for v in variants:
 
     if task_var == 0:
         task_var = 'direc'
-        exp_prefix = 'bugfix_trpo_sensitive_antdirec' + str(max_path_length)
+        exp_prefix = 'bugfix_trpo_maml_antdirec' + str(max_path_length)
         if oracle:
             env = TfEnv(normalize(AntEnvDirecOracle()))
         else:
             env = TfEnv(normalize(AntEnvRandDirec()))
     elif task_var == 1:
         task_var = 'vel'
-        exp_prefix = 'posticml_trpo_sensitive_ant' + str(max_path_length)
+        exp_prefix = 'posticml_trpo_maml_ant' + str(max_path_length)
         if oracle:
             env = TfEnv(normalize(AntEnvOracle()))
         else:
             env = TfEnv(normalize(AntEnvRand()))
     elif task_var == 2:
         task_var = 'pos'
-        exp_prefix = 'posticml_trpo_sensitive_antpos_' + str(max_path_length)
+        exp_prefix = 'posticml_trpo_maml_antpos_' + str(max_path_length)
         if oracle:
             env = TfEnv(normalize(AntEnvRandGoalOracle()))
         else:
@@ -87,7 +87,7 @@ for v in variants:
         batch_size=max_path_length*100, # number of trajs for grad update
         max_path_length=max_path_length,
         n_itr=2000,
-        use_sensitive=use_sensitive,
+        use_maml=use_maml,
         step_size=0.01,
         plot=False,
     )
@@ -97,13 +97,11 @@ for v in variants:
     else:
         exp_name = 'randenv100traj'
 
-    #exp_name = 'testing_parallel_sampler'
 
     run_experiment_lite(
         algo.train(),
         exp_prefix=exp_prefix,
         exp_name=exp_name,
-        #exp_name='sens'+str(int(use_sensitive))+'_fbs'+str(v['fast_batch_size'])+'_mbs'+str(v['meta_batch_size'])+'_flr_' + str(v['fast_lr'])  + '_mlr' + str(v['meta_step_size']),
         # Number of parallel workers for sampling
         n_parallel=8,
         # Only keep the snapshot parameters for the last iteration

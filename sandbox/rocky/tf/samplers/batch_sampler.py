@@ -43,40 +43,24 @@ class BatchSampler(BaseSampler):
             cur_env_params = None
         import time
         start = time.time()
-        # first, a naive implementation.
         if type(reset_args) != list and type(reset_args)!=np.ndarray:
             reset_args = [reset_args]*self.n_envs
         if self.algo.policy.all_param_vals:
             cur_policy_params = [flatten_tensors(x.values()) for x in self.algo.policy.all_param_vals]
         else:
             cur_policy_params = [cur_policy_params]*self.n_envs
-        # assume that n_envs = num parallel
-        if self.n_envs == parallel_sampler.singleton_pool.n_parallel:
-            raise NotImplementedError('this implementation is buggy.')
-            # 1 thread per env
-            paths = parallel_sampler.sample_paths(
-                policy_params=cur_policy_params,
+        # do tasks sequentially and parallelize within rollouts per task.
+        paths = {}
+        for i in range(self.n_envs):
+            paths[i] = parallel_sampler.sample_paths(
+                policy_params=cur_policy_params[i],
                 env_params=cur_env_params,
-                max_samples=self.algo.batch_size,
+                max_samples=self.algo.batch_size / self.n_envs,
                 max_path_length=self.algo.max_path_length,
                 scope=self.algo.scope,
-                reset_arg=reset_args,
-                show_prog_bar=True,
-                multi_task=True,
+                reset_arg=reset_args[i],
+                show_prog_bar=False,
             )
-        else:
-            # do tasks sequentially and parallelize within rollouts per task.
-            paths = {}
-            for i in range(self.n_envs):
-                paths[i] = parallel_sampler.sample_paths(
-                    policy_params=cur_policy_params[i],
-                    env_params=cur_env_params,
-                    max_samples=self.algo.batch_size / self.n_envs,
-                    max_path_length=self.algo.max_path_length,
-                    scope=self.algo.scope,
-                    reset_arg=reset_args[i],
-                    show_prog_bar=False,
-                )
         total_time = time.time() - start
         logger.record_tabular(log_prefix+"TotalExecTime", total_time)
 
@@ -86,7 +70,7 @@ class BatchSampler(BaseSampler):
 
         self.algo.policy.set_param_values(init_policy_params)
 
-        # currently don't support not whole paths (if desired, truncate paths)
+        # currently don't support not whole paths (if desired, add code to truncate paths)
         assert self.algo.whole_paths
 
         return paths
