@@ -6,7 +6,7 @@ from examples.point_env_randgoal import PointEnvRandGoal
 from examples.point_env_randgoal_oracle import PointEnvRandGoalOracle
 from rllab.envs.normalized_env import normalize
 from rllab.misc.instrument import stub, run_experiment_lite
-from sandbox.rocky.tf.policies.sens_minimal_gauss_mlp_policy import MAMLGaussianMLPPolicy
+from sandbox.rocky.tf.policies.maml_minimal_gauss_mlp_policy import MAMLGaussianMLPPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
 
 import tensorflow as tf
@@ -63,6 +63,6 @@ for fast_learning_rate in fast_learning_rates:
                 python_command='python3',
                 seed=1,
                 exp_prefix='vpg_maml_point100',
-                exp_name='trposens'+str(int(use_maml))+'_fbs'+str(fast_batch_size)+'_mbs'+str(meta_batch_size)+'_flr_' + str(fast_learning_rate) + 'metalr_' + str(meta_step_size) +'_step1'+str(num_grad_updates),
+                exp_name='trpomaml'+str(int(use_maml))+'_fbs'+str(fast_batch_size)+'_mbs'+str(meta_batch_size)+'_flr_' + str(fast_learning_rate) + 'metalr_' + str(meta_step_size) +'_step1'+str(num_grad_updates),
                 plot=False,
             )

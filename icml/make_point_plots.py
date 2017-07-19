@@ -4,13 +4,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-#names = ['maml','sens0','random','oracle']
+#names = ['maml','maml0','random','oracle']
 
 prefix = 'icml_point_results_'
 oracle_pkl = prefix+'oracle.pkl'
 
 maml_pkl = prefix+'maml.pkl'
-pretrain_pkl = prefix+'sens0.pkl'
+pretrain_pkl = prefix+'maml0.pkl'
 random_pkl = prefix+'random.pkl'
 
 key = 'task_avg_returns'

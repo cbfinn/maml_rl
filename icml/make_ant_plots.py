@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-#names = ['maml','sens0','random','oracle']
+#names = ['maml','maml0','random','oracle']
 
 prefix = 'icml_ant_results_'
 oracle_pkl = prefix+'oracle.pkl'
