@@ -51,7 +51,6 @@ variants = VG().variants()
 max_path_length = 200
 num_grad_updates = 1
 use_maml=True
-stop_grad = False
 
 for v in variants:
     direc = v['direc']
@@ -84,12 +83,11 @@ for v in variants:
         plot=False,
     )
     direc = 'direc' if direc else ''
-    stop_grad = '_stopgrad' if stop_grad else ''
 
     run_experiment_lite(
         algo.train(),
-        exp_prefix='bugfix_trpo_maml_cheetah' + direc + str(max_path_length),
-        exp_name='maml'+str(int(use_maml))+'_fbs'+str(v['fast_batch_size'])+'_mbs'+str(v['meta_batch_size'])+'_flr_' + str(v['fast_lr'])  + '_mlr' + str(v['meta_step_size']) + stop_grad,
+        exp_prefix='trpo_maml_cheetah' + direc + str(max_path_length),
+        exp_name='maml'+str(int(use_maml))+'_fbs'+str(v['fast_batch_size'])+'_mbs'+str(v['meta_batch_size'])+'_flr_' + str(v['fast_lr'])  + '_mlr' + str(v['meta_step_size']),
         # Number of parallel workers for sampling
         n_parallel=8,
         # Only keep the snapshot parameters for the last iteration
