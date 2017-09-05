@@ -33,7 +33,7 @@ class VG(VariantGenerator):
 
     @variant
     def meta_batch_size(self):
-        return [40] # at least a total batch size of 400. (meta batch size*fast batch size)
+        return [40,80] # at least a total batch size of 400. (meta batch size*fast batch size)
 
     @variant
     def seed(self):
@@ -41,7 +41,7 @@ class VG(VariantGenerator):
 
     @variant
     def direc(self):  # directionenv vs. goal velocity
-        return [False]
+        return [True, False]
 
 
 # should also code up alternative KL thing
@@ -51,6 +51,7 @@ variants = VG().variants()
 max_path_length = 200
 num_grad_updates = 1
 use_maml=True
+ltv=False
 
 for v in variants:
     direc = v['direc']
@@ -66,6 +67,7 @@ for v in variants:
         grad_step_size=v['fast_lr'],
         hidden_nonlinearity=tf.nn.relu,
         hidden_sizes=(100,100),
+        latent_task_var=ltv,
     )
 
     baseline = LinearFeatureBaseline(env_spec=env.spec)
@@ -77,19 +79,20 @@ for v in variants:
         max_path_length=max_path_length,
         meta_batch_size=v['meta_batch_size'],
         num_grad_updates=num_grad_updates,
-        n_itr=800,
+        n_itr=1000,
         use_maml=use_maml,
         step_size=v['meta_step_size'],
         plot=False,
     )
     direc = 'direc' if direc else ''
+    ltv = 'ltv' if ltv else ''
 
     run_experiment_lite(
         algo.train(),
         exp_prefix='trpo_maml_cheetah' + direc + str(max_path_length),
-        exp_name='maml'+str(int(use_maml))+'_fbs'+str(v['fast_batch_size'])+'_mbs'+str(v['meta_batch_size'])+'_flr_' + str(v['fast_lr'])  + '_mlr' + str(v['meta_step_size']),
+        exp_name='maml'+str(int(use_maml))+'_fbs'+str(v['fast_batch_size'])+'_mbs'+str(v['meta_batch_size'])+'_flr_' + str(v['fast_lr'])  + '_mlr' + str(v['meta_step_size']) + ltv+'_1proc',
         # Number of parallel workers for sampling
-        n_parallel=8,
+        n_parallel=1,
         # Only keep the snapshot parameters for the last iteration
         snapshot_mode="gap",
         snapshot_gap=25,
@@ -98,8 +101,8 @@ for v in variants:
         # Specifies the seed for the experiment. If this is not provided, a random seed
         # will be used
         seed=v["seed"],
-        mode="local",
-        #mode="ec2",
+        #mode="local",
+        mode="ec2",
         variant=v,
         # plot=True,
         # terminate_machine=False,

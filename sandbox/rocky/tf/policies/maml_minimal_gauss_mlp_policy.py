@@ -44,6 +44,7 @@ class MAMLGaussianMLPPolicy(StochasticPolicy, Serializable):
             std_parametrization='exp',
             grad_step_size=1.0,
             stop_grad=False,
+            latent_task_var=False,
     ):
         """
         :param env_spec:
@@ -77,6 +78,7 @@ class MAMLGaussianMLPPolicy(StochasticPolicy, Serializable):
         self.input_shape = (None, obs_dim,)
         self.step_size = grad_step_size
         self.stop_grad = stop_grad
+        self.latent_task_var = latent_task_var
         if type(self.step_size) == list:
             raise NotImplementedError('removing this since it didnt work well')
 
@@ -355,6 +357,9 @@ class MAMLGaussianMLPPolicy(StochasticPolicy, Serializable):
 
         cur_shape = self.input_shape
         with tf.variable_scope(name):
+            if self.latent_task_var:
+                all_params['latent_task_var'] = add_param(tf.zeros_initializer(), (cur_shape[-1],), layer_name='ltv', name='ltv')
+                cur_shape = (cur_shape[0], cur_shape[1]*2)
             for idx, hidden_size in enumerate(hidden_sizes):
                 W, b, cur_shape = make_dense_layer(
                     cur_shape,
@@ -390,6 +395,10 @@ class MAMLGaussianMLPPolicy(StochasticPolicy, Serializable):
                 l_in = input_tensor
 
             l_hid = l_in
+            if self.latent_task_var:
+                # add zero so that it is tiled across 0th dim.
+                ltv = tf.zeros_like(l_hid) + all_params['latent_task_var']
+                l_hid = tf.concat([l_hid, ltv], axis=1)
 
             for idx in range(self.n_hidden):
                 l_hid = forward_dense_layer(l_hid, all_params['W'+str(idx)], all_params['b'+str(idx)],

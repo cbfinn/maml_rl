@@ -1,13 +1,17 @@
+import pdb; pdb.set_trace()
+
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
+from rllab.envs.mujoco.half_cheetah_env import HalfCheetahEnv
 from rllab.envs.mujoco.half_cheetah_env_rand import HalfCheetahEnvRand
 from rllab.envs.mujoco.half_cheetah_env_rand_direc import HalfCheetahEnvRandDirec
 from rllab.envs.mujoco.half_cheetah_env_direc_oracle import HalfCheetahEnvDirecOracle
 from rllab.envs.mujoco.half_cheetah_env_rand import HalfCheetahEnvRand
 from rllab.envs.mujoco.half_cheetah_env_oracle import HalfCheetahEnvOracle
 from rllab.envs.normalized_env import normalize
-from rllab.misc.instrument import stub, run_experiment_lite, variant, VariantGenerator
+from rllab.misc.instrument import stub, run_experiment_lite
 from sandbox.rocky.tf.algos.trpo import TRPO
+from sandbox.rocky.tf.algos.vpg import VPG
 from sandbox.rocky.tf.policies.minimal_gauss_mlp_policy import GaussianMLPPolicy
 from sandbox.rocky.tf.envs.base import TfEnv
 
@@ -15,13 +19,17 @@ import tensorflow as tf
 
 stub(globals())
 
-
+from rllab.misc.instrument import VariantGenerator, variant
 
 class VG(VariantGenerator):
 
     @variant
     def seed(self):
         return [1]
+
+    @variant
+    def use_trpo(self):
+        return [False]
 
     @variant
     def oracle(self):
@@ -52,7 +60,8 @@ for v in variants:
             env = TfEnv(normalize(HalfCheetahEnvRandDirec()))
     else:
         if oracle:
-            env = TfEnv(normalize(HalfCheetahEnvOracle()))
+            env = TfEnv(normalize(HalfCheetahEnv()))
+            #env = TfEnv(normalize(HalfCheetahEnvOracle()))
         else:
             env = TfEnv(normalize(HalfCheetahEnvRand()))
     policy = GaussianMLPPolicy(
@@ -63,26 +72,43 @@ for v in variants:
     )
 
     baseline = LinearFeatureBaseline(env_spec=env.spec)
-    algo = TRPO(
-        env=env,
-        policy=policy,
-        baseline=baseline,
-        batch_size=max_path_length*100, # number of trajs for grad update
-        max_path_length=max_path_length,
-        n_itr=1000,
-        use_maml=use_maml,
-        step_size=0.01,
-        plot=False,
-    )
+    if v['use_trpo']:
+        algo = TRPO(
+            env=env,
+            policy=policy,
+            baseline=baseline,
+            batch_size=max_path_length*100, # number of trajs for grad update
+            max_path_length=max_path_length,
+            n_itr=1000,
+            use_maml=use_maml,
+            step_size=0.01,
+            plot=False,
+        )
+    else:
+        algo = VPG(
+            env=env,
+            policy=policy,
+            baseline=baseline,
+            batch_size=max_path_length*100, # number of trajs for grad update
+            max_path_length=max_path_length,
+            n_itr=1000,
+            optimizer_args={'tf_optimizer_args':{'learning_rate': 0.01}},  # typically 0.001
+            plot=False,
+        )
 
     if oracle:
-        exp_name = 'oracleenv'
+        if v['use_trpo']:
+            exp_name = 'oracleenv'
+        else:
+            exp_name = 'oracleenv_vpg'
     else:
         exp_name = 'randenv'
     if direc:
         exp_prefix = 'trpo_maml_cheetahdirec' + str(max_path_length)
     else:
-        exp_prefix = 'bugfix_trpo_maml_cheetah' + str(max_path_length)
+        #exp_prefix = 'trpo_online_cheetah' + str(max_path_length)
+        exp_prefix = 'online_cheetah' + str(max_path_length)
+        #exp_prefix = 'bugfix_trpo_maml_cheetah' + str(max_path_length)
 
     run_experiment_lite(
         algo.train(),
@@ -101,6 +127,7 @@ for v in variants:
         mode="local",
         #mode="ec2",
         variant=v,
+        python_command='python3',
         # plot=True,
         # terminate_machine=False,
     )

@@ -19,6 +19,9 @@ class HalfCheetahEnv(MujocoEnv, Serializable):
         super(HalfCheetahEnv, self).__init__(*args, **kwargs)
         Serializable.__init__(self, *args, **kwargs)
 
+    def sample_goals(self, num_goals):
+        return np.random.uniform(0.0, 0.0, (num_goals, ))
+
     def get_current_obs(self):
         return np.concatenate([
             self.model.data.qpos.flatten()[1:],

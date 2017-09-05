@@ -512,6 +512,8 @@ def index():
     # exp_json = json.dumps(exp_data)
     if "AverageReturn" in plottable_keys:
         plot_key = "AverageReturn"
+    elif "1AverageReturn" in plottable_keys:
+        plot_key = "1AverageReturn"
     elif len(plottable_keys) > 0:
         plot_key = plottable_keys[0]
     else:
